@@ -1,0 +1,6 @@
+# FinSight ECS — add to ~/.ssh/config (replace placeholders; do not commit real IP/key paths)
+Host finsight-ecs
+    HostName <ECS_PUBLIC_IP>
+    User root
+    IdentityFile ~/.ssh/<private-key>
+    IdentitiesOnly yes

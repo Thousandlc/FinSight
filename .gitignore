@@ -1,0 +1,35 @@
+.DS_Store
+**/.build/
+/Packages
+/*.xcodeproj
+xcuserdata/
+DerivedData/
+.swiftpm/config/registries.json
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+.netrc
+*.xcuserstate
+
+# Local secrets / credentials (templates remain trackable)
+.env
+.env.*
+!.env.example
+production.env
+Config/Secrets.xcconfig
+Config/AIGateway.xcconfig
+Apps/Youshu/Resources/Secrets.plist
+*.p8
+*.p12
+*.pfx
+*.mobileprovision
+*.pem
+*.key
+
+# Runtime / backup artifacts
+*.finsightbackup
+youshu-store.json
+finsight-store.json
+
+.smoke-output/
+.eval-output/
+services/youshu-ai-gateway/dist/
+services/youshu-ai-gateway/bin/

@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "title",
+    "body",
+    "answer",
+    "citedFactKeys",
+    "unknowns",
+    "confidence",
+    "keyFacts",
+    "warnings",
+    "actions",
+    "references"
+  ],
+  "properties": {
+    "title": { "type": "string", "minLength": 1 },
+    "body": { "type": "string", "minLength": 1 },
+    "answer": { "type": "string", "minLength": 1 },
+    "citedFactKeys": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "disclaimer": { "type": ["string", "null"] },
+    "unknowns": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "keyFacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/keyFact" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/warning" }
+    },
+    "actions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/action" }
+    },
+    "references": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/reference" }
+    }
+  },
+  "$defs": {
+    "keyFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "value", "kind", "source"],
+      "properties": {
+        "label": { "type": "string" },
+        "kind": {
+          "type": "string",
+          "enum": ["balance", "income", "expense", "debt", "cashFlow", "savings", "purchase", "other"]
+        },
+        "source": { "type": "string" },
+        "value": { "$ref": "#/$defs/keyFactValue" }
+      }
+    },
+    "keyFactValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["money", "text", "percent", "date"]
+        },
+        "amount": { "type": "number" },
+        "currencyCode": { "type": "string", "minLength": 1 },
+        "value": {},
+        "date": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "money" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["amount", "currencyCode"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "text" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["value"],
+            "properties": {
+              "value": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "percent" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["value"],
+            "properties": {
+              "value": { "type": "number" }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "date" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["date"]
+          }
+        }
+      ]
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "message", "severity", "source"],
+      "properties": {
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "severity": {
+          "type": "string",
+          "enum": ["safe", "warning", "risk"]
+        },
+        "source": { "type": "string" }
+      }
+    },
+    "action": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "destination"],
+      "properties": {
+        "title": { "type": "string" },
+        "destination": {
+          "type": "string",
+          "enum": ["cashFlow", "debt", "transactions", "accounts"]
+        }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key"],
+      "properties": {
+        "key": { "type": "string" }
+      }
+    }
+  }
+}

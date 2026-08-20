@@ -1,0 +1,63 @@
+{
+  "scenarioId": "month_end_below_safe_fallback",
+  "reasonCode": "monthEndBelowSafeBalance",
+  "assessmentTruthSource": "swift-policy-golden",
+  "generationPath": "FinancialRiskPolicyProvenanceEmissionFixtures.monthEndBelowSafeFallbackPolicyInput → FinancialRiskPolicyEngine.evaluate → FinancialRiskAssessmentRequestMapper.toDTO",
+  "financialRiskAssessment": {
+    "overallLevel": "warning",
+    "policyVersion": "v1",
+    "debtDataState": "knownNoDebt",
+    "signals": [
+      {
+        "kind": "cashFlow",
+        "level": "warning",
+        "reasonCode": "monthEndBelowSafeBalance",
+        "sourceFactKeys": [
+          "estimatedMonthEndBalance",
+          "safeBalance"
+        ],
+        "recommendedActionDestinations": [
+          "cashFlow"
+        ]
+      }
+    ],
+    "dataCompleteness": {
+      "debt": "known",
+      "cashFlowProjection": "known",
+      "income": "known",
+      "expense": "known",
+      "requiredUnknownReasonCodes": []
+    }
+  },
+  "monthlySummaryFacts": {
+    "availableCash": {
+      "amount": "1000",
+      "currencyCode": "CNY"
+    },
+    "monthlyIncome": {
+      "amount": "5000",
+      "currencyCode": "CNY"
+    },
+    "monthlyExpense": {
+      "amount": "3000",
+      "currencyCode": "CNY"
+    },
+    "monthlyDebtPayment": {
+      "amount": "0",
+      "currencyCode": "CNY"
+    },
+    "primaryPressure": "未来现金流风险",
+    "estimatedMonthEndBalance": {
+      "amount": "500",
+      "currencyCode": "CNY"
+    },
+    "safeBalance": {
+      "amount": "2000",
+      "currencyCode": "CNY"
+    },
+    "sourceLabels": [
+      "Account",
+      "CashFlow"
+    ]
+  }
+}

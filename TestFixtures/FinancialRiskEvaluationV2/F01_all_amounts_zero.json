@@ -1,0 +1,23 @@
+{
+  "assessmentTruthSource" : "swift-policy-golden",
+  "caseId" : "F01_all_amounts_zero",
+  "financialRiskAssessment" : {
+    "dataCompleteness" : {
+      "cashFlowProjection" : "known",
+      "debt" : "known",
+      "expense" : "known",
+      "income" : "known",
+      "requiredUnknownReasonCodes" : [
+
+      ]
+    },
+    "debtDataState" : "knownDebt",
+    "overallLevel" : "safe",
+    "policyVersion" : "v1",
+    "signals" : [
+
+    ]
+  },
+  "generationPath" : "FinancialRiskPolicyVectorInputs.V11 → FinancialRiskPolicyEngine.evaluate → FinancialRiskAssessmentRequestMapper.toDTO",
+  "policyVectorId" : "V11"
+}

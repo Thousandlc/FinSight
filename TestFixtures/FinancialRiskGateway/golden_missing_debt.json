@@ -1,0 +1,13 @@
+{
+  "overallLevel": "safe",
+  "policyVersion": "v1",
+  "debtDataState": "missing",
+  "signals": [],
+  "dataCompleteness": {
+    "debt": "missing",
+    "cashFlowProjection": "known",
+    "income": "known",
+    "expense": "known",
+    "requiredUnknownReasonCodes": ["debtDataMissing"]
+  }
+}

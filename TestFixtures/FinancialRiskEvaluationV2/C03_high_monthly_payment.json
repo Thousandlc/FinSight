@@ -1,0 +1,33 @@
+{
+  "assessmentTruthSource" : "swift-policy-golden",
+  "caseId" : "C03_high_monthly_payment",
+  "financialRiskAssessment" : {
+    "dataCompleteness" : {
+      "cashFlowProjection" : "known",
+      "debt" : "known",
+      "expense" : "known",
+      "income" : "known",
+      "requiredUnknownReasonCodes" : [
+
+      ]
+    },
+    "debtDataState" : "knownDebt",
+    "overallLevel" : "warning",
+    "policyVersion" : "v1",
+    "signals" : [
+      {
+        "kind" : "debt",
+        "level" : "warning",
+        "reasonCode" : "highDebtPaymentToIncome",
+        "recommendedActionDestinations" : [
+          "cashFlow",
+          "debt"
+        ],
+        "sourceFactKeys" : [
+          "debtPaymentToIncomePercent"
+        ]
+      }
+    ]
+  },
+  "generationPath" : "FinancialRiskEvaluationGoldenSupport.evalC03PolicyInput → FinancialRiskPolicyEngine.evaluate → FinancialRiskAssessmentRequestMapper.toDTO"
+}

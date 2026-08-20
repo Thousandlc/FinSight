@@ -1,0 +1,35 @@
+{
+  "assessmentTruthSource" : "swift-policy-golden",
+  "caseId" : "D02_zero_income_month",
+  "financialRiskAssessment" : {
+    "dataCompleteness" : {
+      "cashFlowProjection" : "known",
+      "debt" : "known",
+      "expense" : "known",
+      "income" : "known",
+      "requiredUnknownReasonCodes" : [
+
+      ]
+    },
+    "debtDataState" : "knownDebt",
+    "overallLevel" : "warning",
+    "policyVersion" : "v1",
+    "signals" : [
+      {
+        "kind" : "incomeExpense",
+        "level" : "warning",
+        "reasonCode" : "zeroIncomeWithExpenses",
+        "recommendedActionDestinations" : [
+          "cashFlow",
+          "transactions"
+        ],
+        "sourceFactKeys" : [
+          "monthlyIncome",
+          "monthlyExpense"
+        ]
+      }
+    ]
+  },
+  "generationPath" : "FinancialRiskPolicyVectorInputs.V10 → FinancialRiskPolicyEngine.evaluate → FinancialRiskAssessmentRequestMapper.toDTO",
+  "policyVectorId" : "V10"
+}

@@ -1,0 +1,34 @@
+{
+  "assessmentTruthSource" : "swift-policy-golden",
+  "caseId" : "B01_minimum_below_safe",
+  "financialRiskAssessment" : {
+    "dataCompleteness" : {
+      "cashFlowProjection" : "known",
+      "debt" : "known",
+      "expense" : "known",
+      "income" : "known",
+      "requiredUnknownReasonCodes" : [
+
+      ]
+    },
+    "debtDataState" : "knownDebt",
+    "overallLevel" : "warning",
+    "policyVersion" : "v1",
+    "signals" : [
+      {
+        "kind" : "cashFlow",
+        "level" : "warning",
+        "reasonCode" : "cashFlowBelowSafeBalance",
+        "recommendedActionDestinations" : [
+          "cashFlow"
+        ],
+        "sourceFactKeys" : [
+          "minimumBalance",
+          "safeBalance"
+        ]
+      }
+    ]
+  },
+  "generationPath" : "FinancialRiskPolicyVectorInputs.V2 → FinancialRiskPolicyEngine.evaluate → FinancialRiskAssessmentRequestMapper.toDTO",
+  "policyVectorId" : "V2"
+}

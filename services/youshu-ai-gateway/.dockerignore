@@ -1,0 +1,8 @@
+.eval-output/
+.smoke-output/
+.env
+*.exe
+**/*_test.go
+internal/eval/
+.git/
+.gitignore

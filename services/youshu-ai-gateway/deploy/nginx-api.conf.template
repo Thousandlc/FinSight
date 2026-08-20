@@ -1,0 +1,53 @@
+# FinSight AI Gateway — Nginx reverse proxy template (P0-5B1B)
+# Do NOT enable public HTTPS until ICP filing completes.
+#
+# 1. Replace api.example.com with your approved domain.
+# 2. Issue TLS certificate (e.g. certbot / Alibaba Cloud certificate service).
+# 3. ln -s this file to /etc/nginx/conf.d/finsight-api.conf
+# 4. nginx -t && systemctl reload nginx
+#
+# Gateway continues to listen on 127.0.0.1:8080 only.
+
+upstream finsight_ai_gateway {
+    server 127.0.0.1:8080;
+    keepalive 8;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name api.example.com;
+
+    # ssl_certificate     /etc/nginx/ssl/api.example.com/fullchain.pem;
+    # ssl_certificate_key /etc/nginx/ssl/api.example.com/privkey.pem;
+
+    client_max_body_size 256k;
+
+    location /health {
+        proxy_pass http://finsight_ai_gateway;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+    }
+
+    location /ready {
+        proxy_pass http://finsight_ai_gateway;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+    }
+
+    location /v1/ai/ {
+        proxy_pass http://finsight_ai_gateway;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 75s;
+    }
+}
+
+# Optional HTTP → HTTPS redirect (enable after TLS is ready)
+# server {
+#     listen 80;
+#     server_name api.example.com;
+#     return 301 https://$host$request_uri;
+# }

@@ -1,0 +1,34 @@
+{
+  "assessmentTruthSource" : "swift-policy-golden",
+  "caseId" : "C05_high_dti",
+  "financialRiskAssessment" : {
+    "dataCompleteness" : {
+      "cashFlowProjection" : "known",
+      "debt" : "known",
+      "expense" : "known",
+      "income" : "known",
+      "requiredUnknownReasonCodes" : [
+
+      ]
+    },
+    "debtDataState" : "knownDebt",
+    "overallLevel" : "warning",
+    "policyVersion" : "v1",
+    "signals" : [
+      {
+        "kind" : "debt",
+        "level" : "warning",
+        "reasonCode" : "highDebtPaymentToIncome",
+        "recommendedActionDestinations" : [
+          "cashFlow",
+          "debt"
+        ],
+        "sourceFactKeys" : [
+          "debtPaymentToIncomePercent"
+        ]
+      }
+    ]
+  },
+  "generationPath" : "FinancialRiskPolicyVectorInputs.V9 → FinancialRiskPolicyEngine.evaluate → FinancialRiskAssessmentRequestMapper.toDTO",
+  "policyVectorId" : "V9"
+}

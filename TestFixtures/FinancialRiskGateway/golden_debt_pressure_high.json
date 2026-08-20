@@ -1,0 +1,21 @@
+{
+  "overallLevel": "warning",
+  "policyVersion": "v1",
+  "debtDataState": "knownDebt",
+  "signals": [
+    {
+      "kind": "debt",
+      "level": "warning",
+      "reasonCode": "highDebtPressureScore",
+      "sourceFactKeys": ["debtPressureLevel"],
+      "recommendedActionDestinations": ["debt", "cashFlow"]
+    }
+  ],
+  "dataCompleteness": {
+    "debt": "known",
+    "cashFlowProjection": "known",
+    "income": "known",
+    "expense": "known",
+    "requiredUnknownReasonCodes": []
+  }
+}

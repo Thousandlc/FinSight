@@ -1,0 +1,33 @@
+{
+  "assessmentTruthSource" : "swift-policy-golden",
+  "caseId" : "B04_short_term_negative_balance",
+  "financialRiskAssessment" : {
+    "dataCompleteness" : {
+      "cashFlowProjection" : "known",
+      "debt" : "known",
+      "expense" : "known",
+      "income" : "known",
+      "requiredUnknownReasonCodes" : [
+
+      ]
+    },
+    "debtDataState" : "knownDebt",
+    "overallLevel" : "risk",
+    "policyVersion" : "v1",
+    "signals" : [
+      {
+        "kind" : "cashFlow",
+        "level" : "risk",
+        "reasonCode" : "negativeProjectedBalance",
+        "recommendedActionDestinations" : [
+          "cashFlow"
+        ],
+        "sourceFactKeys" : [
+          "minimumBalance"
+        ]
+      }
+    ]
+  },
+  "generationPath" : "FinancialRiskPolicyVectorInputs.V3 → FinancialRiskPolicyEngine.evaluate → FinancialRiskAssessmentRequestMapper.toDTO",
+  "policyVectorId" : "V3"
+}

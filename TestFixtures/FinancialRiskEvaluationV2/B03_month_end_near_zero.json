@@ -1,0 +1,45 @@
+{
+  "assessmentTruthSource" : "swift-policy-golden",
+  "caseId" : "B03_month_end_near_zero",
+  "financialRiskAssessment" : {
+    "dataCompleteness" : {
+      "cashFlowProjection" : "known",
+      "debt" : "known",
+      "expense" : "known",
+      "income" : "known",
+      "requiredUnknownReasonCodes" : [
+
+      ]
+    },
+    "debtDataState" : "knownDebt",
+    "overallLevel" : "warning",
+    "policyVersion" : "v1",
+    "signals" : [
+      {
+        "kind" : "cashFlow",
+        "level" : "warning",
+        "reasonCode" : "cashFlowBelowSafeBalance",
+        "recommendedActionDestinations" : [
+          "cashFlow"
+        ],
+        "sourceFactKeys" : [
+          "minimumBalance",
+          "safeBalance"
+        ]
+      },
+      {
+        "kind" : "debt",
+        "level" : "warning",
+        "reasonCode" : "highDebtPaymentToIncome",
+        "recommendedActionDestinations" : [
+          "cashFlow",
+          "debt"
+        ],
+        "sourceFactKeys" : [
+          "debtPaymentToIncomePercent"
+        ]
+      }
+    ]
+  },
+  "generationPath" : "EvalCasePolicyInputs.evalPolicyInput → FinancialRiskPolicyEngine.evaluate → FinancialRiskAssessmentRequestMapper.toDTO"
+}

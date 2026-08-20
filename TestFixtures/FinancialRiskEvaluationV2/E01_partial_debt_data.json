@@ -1,0 +1,34 @@
+{
+  "assessmentTruthSource" : "swift-policy-golden",
+  "caseId" : "E01_partial_debt_data",
+  "financialRiskAssessment" : {
+    "dataCompleteness" : {
+      "cashFlowProjection" : "partial",
+      "debt" : "partial",
+      "expense" : "known",
+      "income" : "known",
+      "requiredUnknownReasonCodes" : [
+
+      ]
+    },
+    "debtDataState" : "partial",
+    "overallLevel" : "warning",
+    "policyVersion" : "v1",
+    "signals" : [
+      {
+        "kind" : "debt",
+        "level" : "warning",
+        "reasonCode" : "highDebtPaymentToIncome",
+        "recommendedActionDestinations" : [
+          "cashFlow",
+          "debt"
+        ],
+        "sourceFactKeys" : [
+          "debtPaymentToIncomePercent"
+        ]
+      }
+    ]
+  },
+  "generationPath" : "FinancialRiskEvaluationGoldenSupport.productionAssessment → FinancialRiskAssessmentRequestMapper.toDTO",
+  "productionScenario" : "E01_partial_debt_data"
+}

@@ -1,0 +1,34 @@
+{
+  "assessmentTruthSource" : "swift-policy-golden",
+  "caseId" : "C06_debt_but_adequate_cashflow",
+  "financialRiskAssessment" : {
+    "dataCompleteness" : {
+      "cashFlowProjection" : "known",
+      "debt" : "known",
+      "expense" : "known",
+      "income" : "known",
+      "requiredUnknownReasonCodes" : [
+
+      ]
+    },
+    "debtDataState" : "knownDebt",
+    "overallLevel" : "risk",
+    "policyVersion" : "v1",
+    "signals" : [
+      {
+        "kind" : "debt",
+        "level" : "risk",
+        "reasonCode" : "criticalDebtPressure",
+        "recommendedActionDestinations" : [
+          "cashFlow",
+          "debt"
+        ],
+        "sourceFactKeys" : [
+          "debtPressureLevel"
+        ]
+      }
+    ]
+  },
+  "generationPath" : "FinancialRiskPolicyVectorInputs.V16 → FinancialRiskPolicyEngine.evaluate → FinancialRiskAssessmentRequestMapper.toDTO",
+  "policyVectorId" : "V16"
+}

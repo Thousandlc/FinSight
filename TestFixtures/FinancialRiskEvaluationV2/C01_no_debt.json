@@ -1,0 +1,23 @@
+{
+  "assessmentTruthSource" : "swift-policy-golden",
+  "caseId" : "C01_no_debt",
+  "financialRiskAssessment" : {
+    "dataCompleteness" : {
+      "cashFlowProjection" : "partial",
+      "debt" : "known",
+      "expense" : "known",
+      "income" : "known",
+      "requiredUnknownReasonCodes" : [
+
+      ]
+    },
+    "debtDataState" : "knownNoDebt",
+    "overallLevel" : "safe",
+    "policyVersion" : "v1",
+    "signals" : [
+
+    ]
+  },
+  "generationPath" : "FinancialRiskEvaluationGoldenSupport.productionAssessment → FinancialRiskAssessmentRequestMapper.toDTO",
+  "productionScenario" : "C01_no_debt"
+}
