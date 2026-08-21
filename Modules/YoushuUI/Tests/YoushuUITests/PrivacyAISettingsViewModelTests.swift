@@ -33,11 +33,13 @@ struct PrivacyAISettingsViewModelTests {
     private func makeViewModel(
         consentService: AIDataConsentService,
         originalImageRetention: OriginalImageRetentionService,
+        privacyData: PrivacyDataService,
         session: AppSession
     ) -> PrivacyAISettingsViewModel {
         PrivacyAISettingsViewModel(
             consentService: consentService,
             originalImageRetention: originalImageRetention,
+            privacyData: privacyData,
             session: session
         )
     }
@@ -201,9 +203,20 @@ struct PrivacyAISettingsViewModelTests {
         let consentService = AIDataConsentService(consents: container.aiDataConsents)
         let media = MediaLifecycleService(artifacts: container.mediaArtifacts, binaries: failingStore)
         let retention = OriginalImageRetentionService(consentService: consentService, media: media)
+        let privacyData = PrivacyDataService(
+            users: container.users,
+            transactions: container.transactions,
+            debts: container.debts,
+            debtEvents: container.debtEvents,
+            accounts: container.accounts,
+            recognitionRecords: container.aiRecognitionRecords,
+            consents: container.aiDataConsents,
+            media: media
+        )
         let viewModel = makeViewModel(
             consentService: consentService,
             originalImageRetention: retention,
+            privacyData: privacyData,
             session: session
         )
 
@@ -253,6 +266,16 @@ struct PrivacyAISettingsViewModelTests {
             consentService: consentService,
             originalImageRetention: OriginalImageRetentionService(
                 consentService: consentService,
+                media: media
+            ),
+            privacyData: PrivacyDataService(
+                users: container.users,
+                transactions: container.transactions,
+                debts: container.debts,
+                debtEvents: container.debtEvents,
+                accounts: container.accounts,
+                recognitionRecords: container.aiRecognitionRecords,
+                consents: container.aiDataConsents,
                 media: media
             ),
             session: session

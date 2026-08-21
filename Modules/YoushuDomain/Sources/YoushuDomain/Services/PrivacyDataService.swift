@@ -103,15 +103,38 @@ public struct PrivacyDataService: Sendable {
         try await recognitionRecords.deleteAll(userId: userId)
     }
 
-    /// 删除该用户全部本地账本与隐私相关数据（不可恢复）。
-    public func wipeAllUserData(userId: UUID) async throws {
+    /// Deletes all local FinSight data owned by `userId`.
+    ///
+    /// Ordering (monotonic, continue-on-safe-delete):
+    /// 1. Retained original-image binaries (filesystem, independent of JSON)
+    /// 2. Canonical `users.delete` cascade (JSON financial / AI / media metadata)
+    ///
+    /// Successfully removed data is never recreated to simulate rollback.
+    /// Media cleanup failure does not skip store deletion; store failure does not restore binaries.
+    @discardableResult
+    public func wipeAllUserData(userId: UUID) async throws -> PrivacyWipeResult {
+        var mediaCleanupFailed = false
         do {
-            try await media.deleteAll(userId: userId)
-            try await recognitionRecords.deleteAll(userId: userId)
-            try await consents.delete(userId: userId)
+            try await media.deleteAllBinaries(userId: userId)
+        } catch {
+            mediaCleanupFailed = true
+        }
+
+        do {
             try await users.delete(id: userId)
         } catch {
-            throw PrivacyError.deletionFailed("wipe")
+            throw PrivacyError.persistentDeletionIncomplete
+        }
+
+        return mediaCleanupFailed ? .mediaCleanupIncomplete : .complete
+    }
+
+    /// Retries filesystem cleanup for a previously wiped user whose binaries may remain.
+    public func retryWipeMediaCleanup(userId: UUID) async throws {
+        do {
+            try await media.deleteAllBinaries(userId: userId)
+        } catch {
+            throw PrivacyError.mediaCleanupIncomplete
         }
     }
 }

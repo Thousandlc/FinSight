@@ -1,5 +1,12 @@
 import Foundation
 
+public enum PrivacyWipeResult: Equatable, Sendable {
+    /// All targeted local user data and retained binaries were removed.
+    case complete
+    /// Persistent store records were removed, but one or more retained original files remain.
+    case mediaCleanupIncomplete
+}
+
 public enum PrivacyError: Error, Equatable, Sendable {
     case consentRequired(String)
     case deletionFailed(String)
@@ -7,6 +14,8 @@ public enum PrivacyError: Error, Equatable, Sendable {
     case tokenUnavailable
     case operationFailed
     case retentionCleanupFailed(deletedCount: Int, failedImageIds: [String])
+    case persistentDeletionIncomplete
+    case mediaCleanupIncomplete
 
     /// 面向用户的安全提示：不含内部细节、金额、Token。
     public var userMessage: String {
@@ -23,6 +32,10 @@ public enum PrivacyError: Error, Equatable, Sendable {
             return "操作失败，未泄漏任何敏感数据。请稍后重试。"
         case .retentionCleanupFailed:
             return "原图保留已关闭，但部分已保留原图未能清除，请稍后重试。"
+        case .persistentDeletionIncomplete:
+            return "未能删除全部本地数据，请稍后重试。"
+        case .mediaCleanupIncomplete:
+            return "本地账本已删除，但部分已保留原图未能清除。"
         }
     }
 }

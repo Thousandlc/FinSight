@@ -59,7 +59,7 @@ public enum ApplicationRestoreRefresh {
         try await controller.perform()
     }
 
-    private static func resetTransientState(_ viewModels: ViewModels) {
+    static func resetTransientState(_ viewModels: ViewModels) {
         viewModels.debt.selectedDebtId = nil
         viewModels.debt.detail = nil
         viewModels.debt.isPresentingForm = false
@@ -77,11 +77,12 @@ public enum ApplicationRestoreRefresh {
         viewModels.transaction.editingItem = nil
         viewModels.transaction.pendingDeleteItem = nil
 
+        viewModels.ai.resetConversationTransientState()
         viewModels.screenshot.prepareForPresentation()
         viewModels.debtScanner.prepareForPresentation()
     }
 
-    private static func reloadPresentation(_ viewModels: ViewModels) async {
+    static func reloadPresentation(_ viewModels: ViewModels) async {
         await viewModels.home.load()
         await viewModels.transaction.load()
         await viewModels.debt.load()

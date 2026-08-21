@@ -25,6 +25,22 @@ public struct PrivacyAISettingsView: View {
         .navigationTitle("隐私与 AI")
         .navigationBarTitleDisplayMode(.large)
         .accessibilityIdentifier("privacy-ai-settings")
+        .confirmationDialog(
+            "确认删除全部本地数据？",
+            isPresented: deleteConfirmationBinding,
+            titleVisibility: .visible
+        ) {
+            Button("删除全部本地数据", role: .destructive) {
+                Task { await viewModel.confirmDeleteAllLocalData() }
+            }
+            .accessibilityIdentifier("privacy-ai-wipe-confirm")
+            Button("取消", role: .cancel) {
+                viewModel.cancelDeleteAllLocalData()
+            }
+            .accessibilityIdentifier("privacy-ai-wipe-cancel")
+        } message: {
+            Text("将删除本 App 内的账户、交易、债务与计划、AI 洞察与授权、以及已保留的原始图片。此操作无法从当前账本撤销。保存在「文件」中的 .finsightbackup 备份不会被自动删除。")
+        }
         .task { await viewModel.load() }
     }
 
@@ -67,6 +83,47 @@ public struct PrivacyAISettingsView: View {
                     cleanupWarning(warning)
                 }
 
+                YSListSection(title: "数据管理") {
+                    Button {
+                        viewModel.requestDeleteAllLocalData()
+                    } label: {
+                        VStack(alignment: .leading, spacing: YSSpacing.xxs) {
+                            HStack {
+                                Text("删除全部本地数据")
+                                    .font(YSTypography.body.weight(.medium))
+                                    .foregroundStyle(YSColor.Fallback.expense)
+                                Spacer()
+                                if viewModel.isWipeBusy {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                }
+                            }
+                            Text("删除 App 内本地数据，不会删除你此前保存到「文件」中的备份。")
+                                .font(YSTypography.caption)
+                                .foregroundStyle(YSColor.Fallback.textSecondary)
+                                .multilineTextAlignment(.leading)
+                        }
+                        .padding(.vertical, YSSpacing.sm)
+                        .padding(.horizontal, YSSpacing.md)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(viewModel.isBusy)
+                    .accessibilityLabel("删除全部本地数据")
+                    .accessibilityIdentifier("privacy-ai-wipe-button")
+                }
+
+                if let warning = viewModel.wipeFailureMessage {
+                    wipeStatus(warning, retryWipe: viewModel.showsWipeMediaCleanupRetry)
+                }
+
+                if let message = viewModel.wipeStatusMessage {
+                    Text(message)
+                        .font(YSTypography.caption)
+                        .foregroundStyle(YSColor.Fallback.textSecondary)
+                        .padding(.horizontal, YSSpacing.xxs)
+                        .accessibilityIdentifier("privacy-ai-wipe-success")
+                }
+
                 if let error = viewModel.actionError {
                     Text(error)
                         .font(YSTypography.caption)
@@ -104,6 +161,40 @@ public struct PrivacyAISettingsView: View {
         }
         .padding(.vertical, YSSpacing.sm)
         .padding(.horizontal, YSSpacing.md)
+    }
+
+    private var deleteConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: {
+                if case .confirming = viewModel.wipePhase { return true }
+                return false
+            },
+            set: { presented in
+                if !presented {
+                    viewModel.cancelDeleteAllLocalData()
+                }
+            }
+        )
+    }
+
+    private func wipeStatus(_ message: String, retryWipe: Bool) -> some View {
+        VStack(alignment: .leading, spacing: YSSpacing.sm) {
+            Text(message)
+                .font(YSTypography.caption)
+                .foregroundStyle(YSColor.Fallback.expense)
+                .accessibilityIdentifier("privacy-ai-wipe-error")
+            if retryWipe {
+                YSButton(
+                    "重试清除原图",
+                    kind: .secondary,
+                    isLoading: viewModel.isWipeBusy
+                ) {
+                    Task { await viewModel.retryWipeMediaCleanup() }
+                }
+                .accessibilityIdentifier("privacy-ai-wipe-media-retry")
+            }
+        }
+        .padding(.horizontal, YSSpacing.xxs)
     }
 
     private func cleanupWarning(_ message: String) -> some View {

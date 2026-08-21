@@ -225,6 +225,7 @@ public struct AppDependencies {
         PrivacyAISettingsViewModel(
             consentService: consentService,
             originalImageRetention: originalImageRetention,
+            privacyData: privacyData,
             session: session,
             onConsentChanged: onConsentChanged
         )

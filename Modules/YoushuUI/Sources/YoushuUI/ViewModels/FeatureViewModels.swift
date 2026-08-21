@@ -130,8 +130,15 @@ public final class AIAssistantViewModel {
         }
     }
 
-    public func reloadConsent() async {
+    public func resetConversationTransientState() {
+        lastAnswer = nil
+        questionText = ""
+        askError = nil
         hasDeclinedConsentInSession = false
+    }
+
+    public func reloadConsent() async {
+        resetConversationTransientState()
         await load()
     }
 

@@ -14,6 +14,14 @@ public enum PrivacyAISettingsPhase: Equatable, Sendable {
     case error(String)
 }
 
+public enum PrivacyWipePhase: Equatable, Sendable {
+    case idle
+    case confirming
+    case deleting
+    case failed(String)
+    case mediaCleanupIncomplete(String)
+}
+
 @Observable
 @MainActor
 public final class PrivacyAISettingsViewModel {
@@ -25,31 +33,60 @@ public final class PrivacyAISettingsViewModel {
     public var actionError: String?
     public var retentionCleanupWarning: String?
     public var mutatingField: PrivacyAISettingField?
+    public var wipePhase: PrivacyWipePhase = .idle
+    public var wipeStatusMessage: String?
+    public var applicationWipeReset: (@MainActor () async throws -> Void)?
 
     private let consentService: AIDataConsentService
     private let originalImageRetention: OriginalImageRetentionService
+    private let privacyData: PrivacyDataService
     private let session: AppSession
     private let onConsentChanged: (@Sendable () async -> Void)?
     private var mutationGeneration = 0
+    private var wipeGeneration = 0
+    private var pendingMediaCleanupUserId: UUID?
 
     public init(
         consentService: AIDataConsentService,
         originalImageRetention: OriginalImageRetentionService,
+        privacyData: PrivacyDataService,
         session: AppSession,
-        onConsentChanged: (@Sendable () async -> Void)? = nil
+        onConsentChanged: (@Sendable () async -> Void)? = nil,
+        applicationWipeReset: (@MainActor () async throws -> Void)? = nil
     ) {
         self.consentService = consentService
         self.originalImageRetention = originalImageRetention
+        self.privacyData = privacyData
         self.session = session
         self.onConsentChanged = onConsentChanged
+        self.applicationWipeReset = applicationWipeReset
+    }
+
+    public var isWipeBusy: Bool {
+        if case .deleting = wipePhase { return true }
+        return false
     }
 
     public var isBusy: Bool {
-        mutatingField != nil || phase == .loading
+        mutatingField != nil || phase == .loading || isWipeBusy
     }
 
     public var showsRetentionCleanupRetry: Bool {
         retentionCleanupWarning != nil && !retainOriginalImages
+    }
+
+    public var showsWipeMediaCleanupRetry: Bool {
+        if case .mediaCleanupIncomplete = wipePhase { return true }
+        return false
+    }
+
+    public var wipeFailureMessage: String? {
+        switch wipePhase {
+        case .failed(let message), .mediaCleanupIncomplete(let message):
+            return message
+        case .idle, .confirming, .deleting:
+            return nil
+        }
     }
 
     public func load() async {
@@ -106,6 +143,70 @@ public final class PrivacyAISettingsViewModel {
 
     public func retryRetentionCleanup() async {
         await disableRetention(field: .retainOriginalImages)
+    }
+
+    public func requestDeleteAllLocalData() {
+        guard !isWipeBusy else { return }
+        guard mutatingField == nil else { return }
+        wipeStatusMessage = nil
+        wipePhase = .confirming
+    }
+
+    public func cancelDeleteAllLocalData() {
+        guard wipePhase == .confirming else { return }
+        wipePhase = .idle
+    }
+
+    public func confirmDeleteAllLocalData() async {
+        guard wipePhase == .confirming else { return }
+        guard let userId = session.currentUserId else {
+            wipePhase = .failed("尚未完成账户初始化")
+            return
+        }
+        wipePhase = .deleting
+        wipeStatusMessage = nil
+        wipeGeneration += 1
+        let generation = wipeGeneration
+        let deletedUserId = userId
+        do {
+            let result = try await privacyData.wipeAllUserData(userId: deletedUserId)
+            guard generation == wipeGeneration else { return }
+            if let applicationWipeReset {
+                try await applicationWipeReset()
+            }
+            guard generation == wipeGeneration else { return }
+            switch result {
+            case .complete:
+                pendingMediaCleanupUserId = nil
+                wipeStatusMessage = "本地数据已删除。"
+                wipePhase = .idle
+            case .mediaCleanupIncomplete:
+                pendingMediaCleanupUserId = deletedUserId
+                wipeStatusMessage = nil
+                wipePhase = .mediaCleanupIncomplete(PrivacyError.mediaCleanupIncomplete.userMessage)
+            }
+        } catch {
+            guard generation == wipeGeneration else { return }
+            wipePhase = .failed(PrivacySafeErrorMapper.userMessage(for: error))
+        }
+    }
+
+    public func retryWipeMediaCleanup() async {
+        guard case .mediaCleanupIncomplete = wipePhase else { return }
+        guard let leftoverUserId = pendingMediaCleanupUserId else { return }
+        wipePhase = .deleting
+        wipeGeneration += 1
+        let generation = wipeGeneration
+        do {
+            try await privacyData.retryWipeMediaCleanup(userId: leftoverUserId)
+            guard generation == wipeGeneration else { return }
+            pendingMediaCleanupUserId = nil
+            wipeStatusMessage = "残留原图已清除。"
+            wipePhase = .idle
+        } catch {
+            guard generation == wipeGeneration else { return }
+            wipePhase = .mediaCleanupIncomplete(PrivacySafeErrorMapper.userMessage(for: error))
+        }
     }
 
     private func disableRetention(field: PrivacyAISettingField) async {

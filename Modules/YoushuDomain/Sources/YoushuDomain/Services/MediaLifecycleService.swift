@@ -109,6 +109,11 @@ public struct MediaLifecycleService: Sendable {
         try await artifacts.deleteAll(userId: userId)
     }
 
+    /// Filesystem-only cleanup. JSON media metadata is owned by the user-delete cascade.
+    public func deleteAllBinaries(userId: UUID) async throws {
+        try await binaries.deleteAll(userId: userId)
+    }
+
     /// Removes all user-retained original binaries and metadata for one user.
     /// Throws `PrivacyError.retentionCleanupFailed` if any retained item could not be removed.
     public func purgeUserRetainedOriginals(userId: UUID) async throws -> Int {

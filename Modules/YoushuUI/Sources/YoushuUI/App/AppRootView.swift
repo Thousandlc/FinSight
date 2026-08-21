@@ -63,6 +63,12 @@ public struct AppRootView: View {
                 viewModels: refreshViewModels
             )
         }
+        privacyAISettingsVM.applicationWipeReset = {
+            try await ApplicationPrivacyWipeReset.perform(
+                dependencies: dependencies,
+                viewModels: refreshViewModels
+            )
+        }
         _homeViewModel = State(initialValue: homeVM)
         _accountViewModel = State(initialValue: accountVM)
         _transactionViewModel = State(initialValue: transactionVM)
