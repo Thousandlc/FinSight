@@ -13,7 +13,7 @@ let package = Package(
         .library(name: "YoushuUIPreviewMocks", targets: ["YoushuUIPreviewMocks"]),
     ],
     dependencies: [
-        .package(path: "../.."),
+        .package(name: "Youshu", path: "../.."),
     ],
     targets: [
         .target(

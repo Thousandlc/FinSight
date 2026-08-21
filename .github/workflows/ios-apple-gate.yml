@@ -77,7 +77,6 @@ jobs:
             -project Youshu.xcodeproj \
             -scheme Youshu \
             -resolvePackageDependencies
-          swift package resolve
 
       - name: Run iOS integration gate
         run: bash ./scripts/test-ios.sh
