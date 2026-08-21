@@ -3,6 +3,7 @@ import YoushuAI
 import YoushuData
 import YoushuDomain
 
+@MainActor
 public struct AppDependencies {
     public typealias SourceAppVersionProvider = @Sendable () -> String?
 

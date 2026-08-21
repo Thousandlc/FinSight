@@ -176,14 +176,13 @@ public struct AccountListView: View {
     }
 
     private var assistantConsentStatusText: String {
-        switch viewModel.assistantConsentAuthorized {
-        case true:
-            "已允许 AI 读取聚合财务 Context 以回答你的问题。"
-        case false:
-            "尚未授权 AI 使用你的财务信息。"
-        case nil:
-            "正在读取授权状态…"
+        if viewModel.assistantConsentAuthorized == true {
+            return "已允许 AI 读取聚合财务 Context 以回答你的问题。"
         }
+        if viewModel.assistantConsentAuthorized == false {
+            return "尚未授权 AI 使用你的财务信息。"
+        }
+        return "正在读取授权状态…"
     }
 
     private func accountRow(_ summary: AccountSummary) -> some View {
