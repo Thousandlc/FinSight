@@ -76,7 +76,7 @@
 ## 4. 技术债务
 
 1. **AI 全程 Mock**：`AppDependencies` 默认 `MockAIProvider`，无生产 LLM 适配层开关。  
-2. **双 Package 结构**：根 SPM（Domain/Data/AI）与 `YoushuUIPackages` 分离，文档/CI 未统一。  
+2. **双 Package 结构**（历史审计项）：根 SPM（Domain/Data/AI）与 UI package 分离。**当前 canonical topology（2026-08-21）：** `Package.swift` + `Modules/Package.swift`（Xcode 经 `project.yml`）；legacy `AppPackages/YoushuUIPackages` 已移除。
 3. **JSON Document Store**：可支撑 MVP；大数据量列表/查询无索引策略。  
 4. **DebtScannerSheet ~400 行**：接近巨型 View，可拆步骤子视图。  
 5. **DebtViewModel ~328 行**：偏大，列表/表单/还款可拆。  

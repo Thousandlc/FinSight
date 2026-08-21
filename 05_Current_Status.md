@@ -83,7 +83,7 @@ Modules/Package.swift
 → canonical UI package for Xcode（YoushuDesignSystem / YoushuUI / YoushuUIPreviewMocks）
 ```
 
-**P2 follow-up（非 milestone blocker）：** `AppPackages/YoushuUIPackages/Package.swift` 与 `Package.resolved` 为 legacy/dead duplicate artifacts，待后续 hygiene 删除。**尚未删除。**
+**Package topology hygiene（2026-08-21）：** legacy `AppPackages/YoushuUIPackages` duplicate SPM manifest **已移除**；canonical UI entry 为 `Modules/Package.swift` only。
 
 ### GitHub / Apple CI（当前工程状态）
 
@@ -827,7 +827,6 @@ Trust 与 Freshness / Consent 是 **三个独立维度**（见 §18.2）。
 
 - DebtScannerSheet 偏大
 - DebtViewModel 偏大
-- legacy `AppPackages/YoushuUIPackages` duplicate SPM manifest（P2 cleanup pending — 见 §3）
 - NoOp / mock path 的生产替换
 - UI / snapshot / performance tests 不完整
 
