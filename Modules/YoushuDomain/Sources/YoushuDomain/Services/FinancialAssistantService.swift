@@ -219,6 +219,7 @@ public struct FinancialAssistantService: Sendable {
     }
 
     public func evaluatePurchase(amount: Decimal, userId: UUID, asOf: Date = Date()) async throws -> (PurchaseScenario, AssistantAnswer) {
+        try await requireFinancialContextConsent(userId: userId)
         let context = try await loadContext(userId: userId, asOf: asOf)
         let scenario = PurchaseScenarioEngine.evaluate(
             purchaseAmount: Money(amount: amount, currencyCode: context.currencyCode),

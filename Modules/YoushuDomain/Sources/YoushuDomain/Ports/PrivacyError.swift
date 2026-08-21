@@ -6,6 +6,7 @@ public enum PrivacyError: Error, Equatable, Sendable {
     case mediaUnavailable
     case tokenUnavailable
     case operationFailed
+    case retentionCleanupFailed(deletedCount: Int, failedImageIds: [String])
 
     /// 面向用户的安全提示：不含内部细节、金额、Token。
     public var userMessage: String {
@@ -20,6 +21,8 @@ public enum PrivacyError: Error, Equatable, Sendable {
             return "安全凭证不可用，请重新登录或配置后重试。"
         case .operationFailed:
             return "操作失败，未泄漏任何敏感数据。请稍后重试。"
+        case .retentionCleanupFailed:
+            return "原图保留已关闭，但部分已保留原图未能清除，请稍后重试。"
         }
     }
 }

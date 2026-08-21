@@ -467,6 +467,293 @@ struct AIDataConsentTests {
         )
         return (service, consentService, container, userId)
     }
+
+    @Test("independent consent fields persist without overwriting each other")
+    func independentFieldPersistence() async throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("youshu-consent-fields-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let store = YoushuStore(fileURL: fileURL)
+        let container = RepositoryContainer(store: store)
+        let userId = UUID()
+        try await container.users.upsert(User(id: userId, displayName: "Fields"))
+        let consentService = AIDataConsentService(consents: container.aiDataConsents)
+
+        func reloadService() async throws -> AIDataConsentService {
+            let reloaded = try await YoushuStore.load(from: fileURL)
+            return AIDataConsentService(consents: RepositoryContainer(store: reloaded).aiDataConsents)
+        }
+
+        _ = try await consentService.acceptScreenshotPrivacy(userId: userId)
+        var fetched = try await (await reloadService()).fetchOrDefault(userId: userId)
+        #expect(fetched.allowScreenshotImageToAI)
+        #expect(!fetched.allowDebtScanImageToAI)
+        #expect(!fetched.allowFinancialContextToAI)
+        #expect(!fetched.retainOriginalImages)
+
+        _ = try await consentService.acceptDebtScanPrivacy(userId: userId)
+        fetched = try await (await reloadService()).fetchOrDefault(userId: userId)
+        #expect(fetched.allowScreenshotImageToAI)
+        #expect(fetched.allowDebtScanImageToAI)
+        #expect(!fetched.allowFinancialContextToAI)
+
+        _ = try await consentService.acceptAssistantPrivacy(userId: userId)
+        fetched = try await (await reloadService()).fetchOrDefault(userId: userId)
+        #expect(fetched.allowScreenshotImageToAI)
+        #expect(fetched.allowDebtScanImageToAI)
+        #expect(fetched.allowFinancialContextToAI)
+        #expect(!fetched.retainOriginalImages)
+
+        _ = try await consentService.setRetainOriginalImages(true, userId: userId)
+        fetched = try await (await reloadService()).fetchOrDefault(userId: userId)
+        #expect(fetched.allowScreenshotImageToAI)
+        #expect(fetched.allowDebtScanImageToAI)
+        #expect(fetched.allowFinancialContextToAI)
+        #expect(fetched.retainOriginalImages)
+
+        _ = try await consentService.revokeScreenshotPrivacy(userId: userId)
+        fetched = try await (await reloadService()).fetchOrDefault(userId: userId)
+        #expect(!fetched.allowScreenshotImageToAI)
+        #expect(fetched.allowDebtScanImageToAI)
+        #expect(fetched.allowFinancialContextToAI)
+        #expect(fetched.retainOriginalImages)
+
+        _ = try await consentService.revokeDebtScanPrivacy(userId: userId)
+        fetched = try await (await reloadService()).fetchOrDefault(userId: userId)
+        #expect(!fetched.allowDebtScanImageToAI)
+        #expect(fetched.allowFinancialContextToAI)
+        #expect(fetched.retainOriginalImages)
+
+        _ = try await consentService.revokeAssistantPrivacy(userId: userId)
+        fetched = try await (await reloadService()).fetchOrDefault(userId: userId)
+        #expect(!fetched.allowFinancialContextToAI)
+        #expect(fetched.retainOriginalImages)
+
+        _ = try await consentService.setRetainOriginalImages(false, userId: userId)
+        fetched = try await (await reloadService()).fetchOrDefault(userId: userId)
+        #expect(!fetched.retainOriginalImages)
+        #expect(!fetched.allowScreenshotImageToAI)
+        #expect(!fetched.allowDebtScanImageToAI)
+        #expect(!fetched.allowFinancialContextToAI)
+    }
+
+    @Test("screenshot revoke blocks recognition and skips extractor")
+    func screenshotRevokeGate() async throws {
+        let store = YoushuStore()
+        let container = RepositoryContainer(store: store)
+        let userId = UUID()
+        try await container.users.upsert(User(id: userId, displayName: "ShotRevoke"))
+        let consentService = AIDataConsentService(consents: container.aiDataConsents)
+        let extractor = CountingTransactionExtractor()
+        let media = MediaLifecycleService(
+            artifacts: container.mediaArtifacts,
+            binaries: NoPersistMediaBinaryStore()
+        )
+        let service = ScreenshotBookkeepingService(
+            extractor: extractor,
+            transactionService: TransactionService(
+                accounts: container.accounts,
+                transactions: container.transactions
+            ),
+            accounts: container.accounts,
+            consentService: consentService,
+            media: media
+        )
+
+        _ = try await consentService.acceptScreenshotPrivacy(userId: userId)
+        _ = try await service.recognize(imageData: Data("x".utf8), userId: userId)
+        #expect(extractor.callCount == 1)
+
+        _ = try await consentService.revokeScreenshotPrivacy(userId: userId)
+        do {
+            _ = try await service.recognize(imageData: Data("y".utf8), userId: userId)
+            Issue.record("Expected consent required after revoke")
+        } catch let error as PrivacyError {
+            #expect(error == .consentRequired("记账截图"))
+        }
+        #expect(extractor.callCount == 1)
+    }
+
+    @Test("debt scan requires consent when wired")
+    func debtScanGate() async throws {
+        let store = YoushuStore()
+        let container = RepositoryContainer(store: store)
+        let userId = UUID()
+        try await container.users.upsert(User(id: userId, displayName: "DebtGate"))
+        let consentService = AIDataConsentService(consents: container.aiDataConsents)
+        let scanner = CountingDebtScanner()
+        let service = DebtScannerService(
+            scanner: scanner,
+            debtService: DebtService(
+                debts: container.debts,
+                events: container.debtEvents,
+                accounts: container.accounts,
+                transactions: container.transactions
+            ),
+            consentService: consentService
+        )
+        let document = BillDocument(kind: .screenshot, data: Data("bill".utf8), fileName: "a.png")
+
+        do {
+            _ = try await service.scan(documents: [document], userId: userId)
+            Issue.record("Expected consent required")
+        } catch let error as PrivacyError {
+            #expect(error == .consentRequired("债务账单图片"))
+        }
+        #expect(scanner.callCount == 0)
+
+        _ = try await consentService.acceptDebtScanPrivacy(userId: userId)
+        _ = try await service.scan(documents: [document], userId: userId)
+        #expect(scanner.callCount == 1)
+    }
+
+    @Test("debt scan revoke blocks scan and skips scanner")
+    func debtScanRevokeGate() async throws {
+        let store = YoushuStore()
+        let container = RepositoryContainer(store: store)
+        let userId = UUID()
+        try await container.users.upsert(User(id: userId, displayName: "DebtRevoke"))
+        let consentService = AIDataConsentService(consents: container.aiDataConsents)
+        let scanner = CountingDebtScanner()
+        let service = DebtScannerService(
+            scanner: scanner,
+            debtService: DebtService(
+                debts: container.debts,
+                events: container.debtEvents,
+                accounts: container.accounts,
+                transactions: container.transactions
+            ),
+            consentService: consentService
+        )
+        let document = BillDocument(kind: .screenshot, data: Data("bill".utf8), fileName: "a.png")
+
+        _ = try await consentService.acceptDebtScanPrivacy(userId: userId)
+        _ = try await service.scan(documents: [document], userId: userId)
+        #expect(scanner.callCount == 1)
+
+        _ = try await consentService.revokeDebtScanPrivacy(userId: userId)
+        do {
+            _ = try await service.scan(documents: [document], userId: userId)
+            Issue.record("Expected consent required after revoke")
+        } catch let error as PrivacyError {
+            #expect(error == .consentRequired("债务账单图片"))
+        }
+        #expect(scanner.callCount == 1)
+    }
+
+    @Test("retainOriginalImages preference persists without changing AI consent fields")
+    func retainOriginalImagesContract() async throws {
+        let store = YoushuStore()
+        let container = RepositoryContainer(store: store)
+        let userId = UUID()
+        try await container.users.upsert(User(id: userId, displayName: "Retain"))
+        let consentService = AIDataConsentService(consents: container.aiDataConsents)
+
+        _ = try await consentService.acceptScreenshotPrivacy(userId: userId)
+        _ = try await consentService.acceptDebtScanPrivacy(userId: userId)
+        _ = try await consentService.acceptAssistantPrivacy(userId: userId)
+
+        _ = try await consentService.setRetainOriginalImages(true, userId: userId)
+        var fetched = try await consentService.fetchOrDefault(userId: userId)
+        #expect(fetched.retainOriginalImages)
+        #expect(fetched.allowScreenshotImageToAI)
+        #expect(fetched.allowDebtScanImageToAI)
+        #expect(fetched.allowFinancialContextToAI)
+
+        _ = try await consentService.setRetainOriginalImages(false, userId: userId)
+        fetched = try await consentService.fetchOrDefault(userId: userId)
+        #expect(!fetched.retainOriginalImages)
+        #expect(fetched.allowScreenshotImageToAI)
+        #expect(fetched.allowDebtScanImageToAI)
+        #expect(fetched.allowFinancialContextToAI)
+    }
+
+    @Test("evaluatePurchase requires financial context consent before provider call")
+    func evaluatePurchaseConsentGate() async throws {
+        let env = try await makeAssistantConsentEnv()
+        let assistant = PurchaseScenarioCountingAssistant()
+        let service = FinancialAssistantService(
+            accounts: env.container.accounts,
+            transactions: env.container.transactions,
+            debts: env.container.debts,
+            repaymentPlans: env.container.repaymentPlans,
+            assets: env.container.assets,
+            budgets: env.container.budgets,
+            goals: env.container.goals,
+            insights: env.container.insights,
+            users: env.container.users,
+            assistant: assistant,
+            consentService: env.consentService
+        )
+
+        do {
+            _ = try await service.evaluatePurchase(amount: 3_000, userId: env.userId)
+            Issue.record("Expected consent required")
+        } catch let error as PrivacyError {
+            #expect(error == .consentRequired("财务助手 Context"))
+        }
+        #expect(assistant.phrasePurchaseScenarioCount == 0)
+
+        _ = try await env.consentService.acceptAssistantPrivacy(userId: env.userId)
+        let (_, answer) = try await service.evaluatePurchase(amount: 3_000, userId: env.userId)
+        #expect(assistant.phrasePurchaseScenarioCount == 1)
+        #expect(!answer.body.isEmpty)
+    }
+}
+
+// MARK: - Test doubles
+
+private final class CountingTransactionExtractor: TransactionExtracting, @unchecked Sendable {
+    let name = "counting-extractor"
+    private(set) var callCount = 0
+    private let mock = MockAIProvider()
+
+    func extractTransactionDraft(fromImageData data: Data) async throws -> TransactionDraft {
+        callCount += 1
+        return try await mock.extractTransactionDraft(fromImageData: data)
+    }
+}
+
+private final class CountingDebtScanner: DebtScanning, @unchecked Sendable {
+    let name = "counting-scanner"
+    private(set) var callCount = 0
+    private let mock = MockAIProvider()
+
+    func scanDebts(from documents: [BillDocument]) async throws -> [DebtCandidate] {
+        callCount += 1
+        return try await mock.scanDebts(from: documents)
+    }
+}
+
+private final class PurchaseScenarioCountingAssistant: FinancialAssisting, @unchecked Sendable {
+    private let mock = MockAIProvider()
+    private(set) var phrasePurchaseScenarioCount = 0
+    var name: String { mock.name }
+
+    func phraseAnswer(request: AssistantRequestDTO, facts: AnswerFactPack) async throws -> AssistantAnswerDraft {
+        try await mock.phraseAnswer(request: request, facts: facts)
+    }
+
+    func phraseMonthlySummary(
+        request: AssistantRequestDTO,
+        facts: MonthlySummaryFacts,
+        riskAssessment: FinancialRiskAssessment
+    ) async throws -> AssistantAnswerDraft {
+        try await mock.phraseMonthlySummary(request: request, facts: facts, riskAssessment: riskAssessment)
+    }
+
+    func phrasePurchaseScenario(
+        request: AssistantRequestDTO,
+        scenario: PurchaseScenario
+    ) async throws -> AssistantAnswerDraft {
+        phrasePurchaseScenarioCount += 1
+        return try await mock.phrasePurchaseScenario(request: request, scenario: scenario)
+    }
+
+    func phraseInsight(request: AssistantRequestDTO, facts: InsightFactPack) async throws -> AssistantAnswerDraft {
+        try await mock.phraseInsight(request: request, facts: facts)
+    }
 }
 
 @Suite("Token and log security")

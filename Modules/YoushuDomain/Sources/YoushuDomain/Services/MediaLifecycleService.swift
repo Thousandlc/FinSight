@@ -108,4 +108,28 @@ public struct MediaLifecycleService: Sendable {
         try await binaries.deleteAll(userId: userId)
         try await artifacts.deleteAll(userId: userId)
     }
+
+    /// Removes all user-retained original binaries and metadata for one user.
+    /// Throws `PrivacyError.retentionCleanupFailed` if any retained item could not be removed.
+    public func purgeUserRetainedOriginals(userId: UUID) async throws -> Int {
+        let list = try await artifacts.fetchAll(userId: userId)
+        let retained = list.filter { $0.retention == .userRetained }
+        var deletedCount = 0
+        var failedImageIds: [String] = []
+        for artifact in retained {
+            do {
+                try await deleteImage(imageId: artifact.id, userId: userId)
+                deletedCount += 1
+            } catch {
+                failedImageIds.append(artifact.id)
+            }
+        }
+        if !failedImageIds.isEmpty {
+            throw PrivacyError.retentionCleanupFailed(
+                deletedCount: deletedCount,
+                failedImageIds: failedImageIds
+            )
+        }
+        return deletedCount
+    }
 }

@@ -15,6 +15,7 @@ public struct AppDependencies {
     public let debtScanner: DebtScannerService
     public let privacyData: PrivacyDataService
     public let consentService: AIDataConsentService
+    public let originalImageRetention: OriginalImageRetentionService
     public let backupCreation: BackupCreationService
     public let backupRestorePreflight: BackupRestorePreflightService
     public let backupRestore: BackupRestoreService
@@ -28,15 +29,25 @@ public struct AppDependencies {
         mockAIProvider: MockAIProvider = MockAIProvider(),
         secureTokens: any SecureTokenStoring = InMemorySecureTokenStore(),
         gatewayTransport: (any GatewayHTTPTransport)? = nil,
-        sourceAppVersionProvider: @escaping SourceAppVersionProvider = { nil }
+        sourceAppVersionProvider: @escaping SourceAppVersionProvider = { nil },
+        mediaBinaryRootURL: URL? = nil
     ) {
         self.repositories = repositories
         self.secureTokens = secureTokens
         let consent = AIDataConsentService(consents: repositories.aiDataConsents)
         self.consentService = consent
+        let binaries: any MediaBinaryStoring = if let mediaBinaryRootURL {
+            DirectoryMediaBinaryStore(rootURL: mediaBinaryRootURL)
+        } else {
+            NoPersistMediaBinaryStore()
+        }
         let media = MediaLifecycleService(
             artifacts: repositories.mediaArtifacts,
-            binaries: NoPersistMediaBinaryStore()
+            binaries: binaries
+        )
+        self.originalImageRetention = OriginalImageRetentionService(
+            consentService: consent,
+            media: media
         )
         let financialAssisting: any FinancialAssisting = Self.makeFinancialAssisting(
             mode: financialAssistingMode,

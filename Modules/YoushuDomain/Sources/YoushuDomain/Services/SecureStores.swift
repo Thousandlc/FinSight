@@ -32,41 +32,66 @@ public actor DirectoryMediaBinaryStore: MediaBinaryStoring {
         self.rootURL = rootURL
     }
 
+    public var rootDirectory: URL { rootURL }
+
     public func save(imageId: String, userId: UUID, data: Data) async throws -> String? {
-        let dir = rootURL.appendingPathComponent(userId.uuidString, isDirectory: true)
+        let dir = userDirectory(userId: userId)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        Self.applyExcludedFromBackupResource(to: dir)
         let file = dir.appendingPathComponent(sanitize(imageId))
-        try data.write(to: file, options: [.atomic])
+        try Self.writeProtected(data: data, to: file)
+        Self.applyExcludedFromBackupResource(to: file)
         return "\(userId.uuidString)/\(sanitize(imageId))"
     }
 
     public func load(imageId: String, userId: UUID) async throws -> Data? {
-        let file = rootURL
-            .appendingPathComponent(userId.uuidString, isDirectory: true)
-            .appendingPathComponent(sanitize(imageId))
+        let file = fileURL(imageId: imageId, userId: userId)
         guard FileManager.default.fileExists(atPath: file.path) else { return nil }
         return try Data(contentsOf: file)
     }
 
     public func delete(imageId: String, userId: UUID) async throws {
-        let file = rootURL
-            .appendingPathComponent(userId.uuidString, isDirectory: true)
-            .appendingPathComponent(sanitize(imageId))
+        let file = fileURL(imageId: imageId, userId: userId)
         if FileManager.default.fileExists(atPath: file.path) {
             try FileManager.default.removeItem(at: file)
         }
     }
 
     public func deleteAll(userId: UUID) async throws {
-        let dir = rootURL.appendingPathComponent(userId.uuidString, isDirectory: true)
+        let dir = userDirectory(userId: userId)
         if FileManager.default.fileExists(atPath: dir.path) {
             try FileManager.default.removeItem(at: dir)
         }
     }
 
+    public func fileURL(imageId: String, userId: UUID) -> URL {
+        userDirectory(userId: userId).appendingPathComponent(sanitize(imageId))
+    }
+
+    private func userDirectory(userId: UUID) -> URL {
+        rootURL.appendingPathComponent(userId.uuidString, isDirectory: true)
+    }
+
     private func sanitize(_ id: String) -> String {
         id.replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "\\", with: "_")
+    }
+
+    private static func writeProtected(data: Data, to file: URL) throws {
+        #if os(iOS)
+        try data.write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        #else
+        try data.write(to: file, options: [.atomic])
+        #endif
+    }
+
+    private static func applyExcludedFromBackupResource(to url: URL) {
+        #if os(iOS) || os(macOS)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var mutableURL = url
+        try? mutableURL.setResourceValues(values)
+        #endif
     }
 }
 

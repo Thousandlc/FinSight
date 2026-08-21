@@ -49,30 +49,51 @@ public struct AIDataConsentService: Sendable {
         return consent
     }
 
+    // MARK: - Screenshot image consent
+
     public func acceptScreenshotPrivacy(userId: UUID) async throws -> AIDataConsent {
-        var consent = try await fetchOrDefault(userId: userId)
-        consent = consent.grantingScreenshotSession()
-        try await save(consent)
-        return consent
+        try await updateConsent(userId: userId) { $0.allowScreenshotImageToAI = true }
     }
+
+    public func revokeScreenshotPrivacy(userId: UUID) async throws -> AIDataConsent {
+        try await updateConsent(userId: userId) { $0.allowScreenshotImageToAI = false }
+    }
+
+    // MARK: - Debt scan image consent
 
     public func acceptDebtScanPrivacy(userId: UUID) async throws -> AIDataConsent {
-        var consent = try await fetchOrDefault(userId: userId)
-        consent = consent.grantingDebtScanSession()
-        try await save(consent)
-        return consent
+        try await updateConsent(userId: userId) { $0.allowDebtScanImageToAI = true }
     }
 
+    public func revokeDebtScanPrivacy(userId: UUID) async throws -> AIDataConsent {
+        try await updateConsent(userId: userId) { $0.allowDebtScanImageToAI = false }
+    }
+
+    // MARK: - Financial context consent
+
     public func acceptAssistantPrivacy(userId: UUID) async throws -> AIDataConsent {
-        var consent = try await fetchOrDefault(userId: userId)
-        consent = consent.grantingAssistantContext()
-        try await save(consent)
-        return consent
+        try await updateConsent(userId: userId) { $0.allowFinancialContextToAI = true }
     }
 
     public func revokeAssistantPrivacy(userId: UUID) async throws -> AIDataConsent {
+        try await updateConsent(userId: userId) { $0.allowFinancialContextToAI = false }
+    }
+
+    // MARK: - Original image retention preference (persisted only; operational retention is separate)
+
+    public func setRetainOriginalImages(_ retain: Bool, userId: UUID) async throws -> AIDataConsent {
+        try await updateConsent(userId: userId) { $0.retainOriginalImages = retain }
+    }
+
+    // MARK: - Private
+
+    /// Reads latest persisted consent, mutates exactly one logical field (or caller-controlled subset), preserves others.
+    private func updateConsent(
+        userId: UUID,
+        mutate: (inout AIDataConsent) -> Void
+    ) async throws -> AIDataConsent {
         var consent = try await fetchOrDefault(userId: userId)
-        consent = consent.revokingAssistantContext()
+        mutate(&consent)
         try await save(consent)
         return consent
     }
