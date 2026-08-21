@@ -96,6 +96,8 @@ targets:
         product: YoushuDomain
       - package: Youshu
         product: YoushuAI
+      - package: Youshu
+        product: YoushuFoundation
 schemes:
   Youshu:
     build:

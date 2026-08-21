@@ -3,11 +3,13 @@ import Testing
 import YoushuAI
 import YoushuData
 import YoushuDomain
+import YoushuFoundation
 @testable import YoushuUI
 
 @Suite("Application restore refresh UI integration")
 @MainActor
 struct ApplicationRestoreRefreshUITests {
+    private static let fixedCreatedAt = Date(timeIntervalSince1970: 1_700_000_000)
     private static let userU1 = UUID(uuidString: "00000000-0000-0000-0000-000000000201")!
     private static let userU2 = UUID(uuidString: "00000000-0000-0000-0000-000000000202")!
     private static let accountU1 = UUID(uuidString: "00000000-0000-0000-0000-000000000301")!
@@ -53,7 +55,7 @@ struct ApplicationRestoreRefreshUITests {
 
     private func transactionMerchants(in viewModel: TransactionViewModel) -> [String] {
         guard case let .content(snapshot) = viewModel.phase else { return [] }
-        return snapshot.sections.flatMap(\.items).map(\.merchant)
+        return snapshot.sections.flatMap(\.items).map { $0.transaction.merchant ?? "" }
     }
 
     private func stateABackupPayload() -> BackupPayloadV1 {
