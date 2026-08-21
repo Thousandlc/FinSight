@@ -1,8 +1,6 @@
 // swift-tools-version: 6.0
 import PackageDescription
 
-// Legacy entry point retained for local tooling references.
-// Xcode / iOS CI resolve UI products from `Modules/Package.swift`.
 let package = Package(
     name: "YoushuUIPackages",
     platforms: [
@@ -15,7 +13,7 @@ let package = Package(
         .library(name: "YoushuUIPreviewMocks", targets: ["YoushuUIPreviewMocks"]),
     ],
     dependencies: [
-        .package(name: "Youshu", path: "../.."),
+        .package(name: "Youshu", path: ".."),
     ],
     targets: [
         .target(
@@ -23,7 +21,7 @@ let package = Package(
             dependencies: [
                 .product(name: "YoushuFoundation", package: "Youshu"),
             ],
-            path: "../../Modules/YoushuDesignSystem/Sources/YoushuDesignSystem",
+            path: "YoushuDesignSystem/Sources/YoushuDesignSystem",
             resources: [.process("Resources")]
         ),
         .target(
@@ -34,7 +32,7 @@ let package = Package(
                 .product(name: "YoushuData", package: "Youshu"),
                 .product(name: "YoushuAI", package: "Youshu"),
             ],
-            path: "../../Modules/YoushuUI/Sources/YoushuUI"
+            path: "YoushuUI/Sources/YoushuUI"
         ),
         .target(
             name: "YoushuUIPreviewMocks",
@@ -45,7 +43,7 @@ let package = Package(
                 .product(name: "YoushuFoundation", package: "Youshu"),
                 .product(name: "YoushuAI", package: "Youshu"),
             ],
-            path: "../../Modules/YoushuUIPreviewMocks/Sources/YoushuUIPreviewMocks"
+            path: "YoushuUIPreviewMocks/Sources/YoushuUIPreviewMocks"
         ),
     ]
 )
