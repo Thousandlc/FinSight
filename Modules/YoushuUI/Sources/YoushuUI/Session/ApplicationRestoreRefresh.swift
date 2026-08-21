@@ -13,6 +13,7 @@ public enum ApplicationRestoreRefresh {
         public let debtScanner: DebtScannerViewModel
         public let account: AccountViewModel
         public let ai: AIAssistantViewModel
+        public let privacyAISettings: PrivacyAISettingsViewModel
 
         public init(
             home: HomeViewModel,
@@ -21,7 +22,8 @@ public enum ApplicationRestoreRefresh {
             debt: DebtViewModel,
             debtScanner: DebtScannerViewModel,
             account: AccountViewModel,
-            ai: AIAssistantViewModel
+            ai: AIAssistantViewModel,
+            privacyAISettings: PrivacyAISettingsViewModel
         ) {
             self.home = home
             self.transaction = transaction
@@ -30,6 +32,7 @@ public enum ApplicationRestoreRefresh {
             self.debtScanner = debtScanner
             self.account = account
             self.ai = ai
+            self.privacyAISettings = privacyAISettings
         }
     }
 
@@ -67,6 +70,7 @@ public enum ApplicationRestoreRefresh {
         viewModels.account.detailPhase = .loading
         viewModels.account.isPresentingForm = false
         viewModels.account.pendingDeleteSummary = nil
+        viewModels.account.isPresentingPrivacyAISettings = false
 
         viewModels.transaction.isPresentingForm = false
         viewModels.transaction.isPresentingScreenshotBookkeeping = false
@@ -83,6 +87,7 @@ public enum ApplicationRestoreRefresh {
         await viewModels.debt.load()
         await viewModels.account.load()
         await viewModels.ai.reloadConsent()
+        await viewModels.privacyAISettings.load()
         await viewModels.screenshot.loadAccounts()
     }
 }

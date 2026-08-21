@@ -22,9 +22,12 @@ struct ApplicationRestoreRefreshUITests {
         let homeVM = dependencies.makeHomeViewModel()
         let aiVM = dependencies.makeAIViewModel()
         let accountVM = dependencies.makeAccountViewModel(
-            onDataChanged: { await homeVM.load() },
-            onConsentChanged: { await aiVM.reloadConsent() }
+            onDataChanged: { await homeVM.load() }
         )
+        let privacyAISettingsVM = dependencies.makePrivacyAISettingsViewModel {
+            await aiVM.reloadConsent()
+            await homeVM.load()
+        }
         let transactionVM = dependencies.makeTransactionViewModel(onDataChanged: {
             await homeVM.load()
             await accountVM.load()
@@ -48,7 +51,8 @@ struct ApplicationRestoreRefreshUITests {
             debt: debtVM,
             debtScanner: debtScannerVM,
             account: accountVM,
-            ai: aiVM
+            ai: aiVM,
+            privacyAISettings: privacyAISettingsVM
         )
         return (dependencies, viewModels)
     }
@@ -258,7 +262,8 @@ struct ApplicationRestoreRefreshUITests {
         try await dependencies.consentService.acceptAssistantPrivacy(userId: Self.userU1)
 
         await viewModels.account.load()
-        #expect(viewModels.account.assistantConsentAuthorized == true)
+        await viewModels.privacyAISettings.load()
+        #expect(viewModels.privacyAISettings.allowFinancialContextToAI == true)
 
         let backupData = try BackupCodec.encode(payload: stateABackupPayload(), passphrase: "restore-pass")
         _ = try await dependencies.backupRestore.restoreBackup(data: backupData, passphrase: "restore-pass")
@@ -267,7 +272,9 @@ struct ApplicationRestoreRefreshUITests {
         let consent = try await dependencies.consentService.fetchOrDefault(userId: Self.userU1)
         #expect(consent.allowFinancialContextToAI == false)
         #expect(consent.allowScreenshotImageToAI == false)
-        #expect(viewModels.account.assistantConsentAuthorized == false)
+        #expect(viewModels.privacyAISettings.allowFinancialContextToAI == false)
+        #expect(viewModels.privacyAISettings.allowScreenshotImageToAI == false)
+        #expect(viewModels.privacyAISettings.retainOriginalImages == false)
         #expect(viewModels.ai.consentState == .unauthorized)
 
         await viewModels.home.load()

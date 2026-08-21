@@ -208,15 +208,24 @@ public struct AppDependencies {
 
     @MainActor
     public func makeAccountViewModel(
-        onDataChanged: (@Sendable () async -> Void)? = nil,
-        onConsentChanged: (@Sendable () async -> Void)? = nil
+        onDataChanged: (@Sendable () async -> Void)? = nil
     ) -> AccountViewModel {
         AccountViewModel(
             provider: overviewServices.accounts,
             accountService: overviewServices.accountManager,
             session: session,
+            onDataChanged: onDataChanged
+        )
+    }
+
+    @MainActor
+    public func makePrivacyAISettingsViewModel(
+        onConsentChanged: (@Sendable () async -> Void)? = nil
+    ) -> PrivacyAISettingsViewModel {
+        PrivacyAISettingsViewModel(
             consentService: consentService,
-            onDataChanged: onDataChanged,
+            originalImageRetention: originalImageRetention,
+            session: session,
             onConsentChanged: onConsentChanged
         )
     }

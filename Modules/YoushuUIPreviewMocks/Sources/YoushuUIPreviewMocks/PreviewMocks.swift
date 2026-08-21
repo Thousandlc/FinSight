@@ -622,17 +622,14 @@ public enum PreviewAppFactory {
     }
 
     public static func accountViewModel(
-        state: YSPagePhase<AccountListSnapshot>? = nil,
-        assistantAuthorized: Bool = false
+        state: YSPagePhase<AccountListSnapshot>? = nil
     ) -> AccountViewModel {
         let vm = AccountViewModel(
             provider: PreviewAccountListProvider(),
             accountService: PreviewAccountManaging(),
-            session: session(),
-            consentService: consentService(assistantAuthorized: assistantAuthorized)
+            session: session()
         )
         if let state { vm.phase = state }
-        vm.assistantConsentAuthorized = assistantAuthorized
         return vm
     }
 
@@ -666,6 +663,12 @@ public enum PreviewAppFactory {
     public static func dataBackupViewModel() -> DataBackupViewModel {
         AppDependencies(repositories: .inMemory())
             .makeDataBackupViewModel { }
+    }
+
+    public static func privacyAISettingsViewModel() -> PrivacyAISettingsViewModel {
+        let dependencies = AppDependencies(repositories: .inMemory())
+        dependencies.session.configureForPreview(userId: PreviewMockData.userId)
+        return dependencies.makePrivacyAISettingsViewModel()
     }
 }
 

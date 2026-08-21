@@ -34,15 +34,23 @@ import YoushuUIPreviewMocks
 #Preview("账户 · 有数据") {
     AccountListView(
         viewModel: PreviewAppFactory.accountViewModel(state: .content(PreviewMockData.accountList)),
-        dataBackupViewModel: PreviewAppFactory.dataBackupViewModel()
+        dataBackupViewModel: PreviewAppFactory.dataBackupViewModel(),
+        privacyAISettingsViewModel: PreviewAppFactory.privacyAISettingsViewModel()
     )
 }
 
 #Preview("账户 · 空状态") {
     AccountListView(
         viewModel: PreviewAppFactory.accountViewModel(state: .empty(AccountViewModel.emptyConfig)),
-        dataBackupViewModel: PreviewAppFactory.dataBackupViewModel()
+        dataBackupViewModel: PreviewAppFactory.dataBackupViewModel(),
+        privacyAISettingsViewModel: PreviewAppFactory.privacyAISettingsViewModel()
     )
+}
+
+#Preview("隐私与 AI") {
+    NavigationStack {
+        PrivacyAISettingsView(viewModel: PreviewAppFactory.privacyAISettingsViewModel())
+    }
 }
 
 #Preview("AI 助手 · 未授权") {
@@ -122,7 +130,8 @@ import YoushuUIPreviewMocks
         debtScannerViewModel: PreviewAppFactory.debtScannerViewModel(),
         accountViewModel: PreviewAppFactory.accountViewModel(state: .content(PreviewMockData.accountList)),
         aiViewModel: PreviewAppFactory.aiViewModel(state: .empty(AIAssistantViewModel.emptyConfig)),
-        dataBackupViewModel: PreviewAppFactory.dataBackupViewModel()
+        dataBackupViewModel: PreviewAppFactory.dataBackupViewModel(),
+        privacyAISettingsViewModel: PreviewAppFactory.privacyAISettingsViewModel()
     )
 }
 
@@ -135,7 +144,8 @@ import YoushuUIPreviewMocks
         debtScannerViewModel: PreviewAppFactory.debtScannerViewModel(),
         accountViewModel: PreviewAppFactory.accountViewModel(),
         aiViewModel: PreviewAppFactory.aiViewModel(),
-        dataBackupViewModel: PreviewAppFactory.dataBackupViewModel()
+        dataBackupViewModel: PreviewAppFactory.dataBackupViewModel(),
+        privacyAISettingsViewModel: PreviewAppFactory.privacyAISettingsViewModel()
     )
     .preferredColorScheme(.dark)
 }

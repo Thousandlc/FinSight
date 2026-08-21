@@ -42,6 +42,7 @@ public struct MainTabView: View {
     private let accountViewModel: AccountViewModel
     private let aiViewModel: AIAssistantViewModel
     private let dataBackupViewModel: DataBackupViewModel
+    private let privacyAISettingsViewModel: PrivacyAISettingsViewModel
 
     public init(
         homeViewModel: HomeViewModel,
@@ -51,7 +52,8 @@ public struct MainTabView: View {
         debtScannerViewModel: DebtScannerViewModel,
         accountViewModel: AccountViewModel,
         aiViewModel: AIAssistantViewModel,
-        dataBackupViewModel: DataBackupViewModel
+        dataBackupViewModel: DataBackupViewModel,
+        privacyAISettingsViewModel: PrivacyAISettingsViewModel
     ) {
         self.homeViewModel = homeViewModel
         self.transactionViewModel = transactionViewModel
@@ -61,6 +63,7 @@ public struct MainTabView: View {
         self.accountViewModel = accountViewModel
         self.aiViewModel = aiViewModel
         self.dataBackupViewModel = dataBackupViewModel
+        self.privacyAISettingsViewModel = privacyAISettingsViewModel
     }
 
     public var body: some View {
@@ -82,7 +85,8 @@ public struct MainTabView: View {
 
             AccountListView(
                 viewModel: accountViewModel,
-                dataBackupViewModel: dataBackupViewModel
+                dataBackupViewModel: dataBackupViewModel,
+                privacyAISettingsViewModel: privacyAISettingsViewModel
             )
                 .tabItem { Label(MainTab.assets.title, systemImage: MainTab.assets.icon) }
                 .tag(MainTab.assets)

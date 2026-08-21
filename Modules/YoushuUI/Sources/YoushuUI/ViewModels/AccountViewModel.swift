@@ -13,96 +13,41 @@ public final class AccountViewModel {
     public var pendingDeleteSummary: AccountSummary?
     public var formError: String?
     public var isSaving = false
-    public var assistantConsentAuthorized: Bool?
-    public var consentActionError: String?
-    public var isUpdatingConsent = false
+    public var isPresentingPrivacyAISettings = false
 
     private let provider: any AccountListProviding
     private let accountService: any AccountManaging
-    private let consentService: AIDataConsentService
     private let session: AppSession
     private let onDataChanged: (@Sendable () async -> Void)?
-    private let onConsentChanged: (@Sendable () async -> Void)?
 
     public init(
         provider: any AccountListProviding,
         accountService: any AccountManaging,
         session: AppSession,
-        consentService: AIDataConsentService,
-        onDataChanged: (@Sendable () async -> Void)? = nil,
-        onConsentChanged: (@Sendable () async -> Void)? = nil
+        onDataChanged: (@Sendable () async -> Void)? = nil
     ) {
         self.provider = provider
         self.accountService = accountService
-        self.consentService = consentService
         self.session = session
         self.onDataChanged = onDataChanged
-        self.onConsentChanged = onConsentChanged
     }
 
     public func load() async {
         phase = .loading
-        consentActionError = nil
         guard let userId = session.currentUserId else {
             phase = .error("尚未完成账户初始化")
-            assistantConsentAuthorized = nil
             return
         }
         do {
             let snapshot = try await provider.loadSnapshot(userId: userId)
             phase = snapshot.isEmpty ? .empty(Self.emptyConfig) : .content(snapshot)
-            await loadAssistantConsentStatus()
         } catch {
             phase = .error(error.localizedDescription)
         }
     }
 
-    public func loadAssistantConsentStatus() async {
-        guard let userId = session.currentUserId else {
-            assistantConsentAuthorized = nil
-            return
-        }
-        do {
-            let consent = try await consentService.fetchOrDefault(userId: userId)
-            assistantConsentAuthorized = consent.allowFinancialContextToAI
-        } catch {
-            consentActionError = PrivacySafeErrorMapper.userMessage(for: error)
-            assistantConsentAuthorized = nil
-        }
-    }
-
-    public func grantAssistantConsent() async {
-        guard let userId = session.currentUserId else {
-            consentActionError = "尚未完成账户初始化"
-            return
-        }
-        isUpdatingConsent = true
-        consentActionError = nil
-        defer { isUpdatingConsent = false }
-        do {
-            _ = try await consentService.acceptAssistantPrivacy(userId: userId)
-            assistantConsentAuthorized = true
-            await onConsentChanged?()
-        } catch {
-            consentActionError = PrivacySafeErrorMapper.userMessage(for: error)
-        }
-    }
-
-    public func revokeAssistantConsent() async {
-        guard let userId = session.currentUserId else {
-            consentActionError = "尚未完成账户初始化"
-            return
-        }
-        isUpdatingConsent = true
-        consentActionError = nil
-        defer { isUpdatingConsent = false }
-        do {
-            _ = try await consentService.revokeAssistantPrivacy(userId: userId)
-            assistantConsentAuthorized = false
-            await onConsentChanged?()
-        } catch {
-            consentActionError = PrivacySafeErrorMapper.userMessage(for: error)
-        }
+    public func openPrivacyAISettings() {
+        isPresentingPrivacyAISettings = true
     }
 
     public func loadDetail(accountId: UUID) async {

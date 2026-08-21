@@ -5,10 +5,16 @@ import YoushuDomain
 public struct AccountListView: View {
     @Bindable private var viewModel: AccountViewModel
     @Bindable private var dataBackupViewModel: DataBackupViewModel
+    @Bindable private var privacyAISettingsViewModel: PrivacyAISettingsViewModel
 
-    public init(viewModel: AccountViewModel, dataBackupViewModel: DataBackupViewModel) {
+    public init(
+        viewModel: AccountViewModel,
+        dataBackupViewModel: DataBackupViewModel,
+        privacyAISettingsViewModel: PrivacyAISettingsViewModel
+    ) {
         self.viewModel = viewModel
         self.dataBackupViewModel = dataBackupViewModel
+        self.privacyAISettingsViewModel = privacyAISettingsViewModel
     }
 
     public var body: some View {
@@ -31,6 +37,9 @@ public struct AccountListView: View {
                 }
                 .navigationDestination(item: $viewModel.selectedAccountId) { accountId in
                     AccountDetailView(viewModel: viewModel, accountId: accountId)
+                }
+                .navigationDestination(isPresented: $viewModel.isPresentingPrivacyAISettings) {
+                    PrivacyAISettingsView(viewModel: privacyAISettingsViewModel)
                 }
                 .navigationDestination(isPresented: $isPresentingDataBackup) {
                     DataBackupView(viewModel: dataBackupViewModel)
@@ -59,7 +68,9 @@ public struct AccountListView: View {
         case .loading:
             YSLoadingState()
         case .empty(let config):
-            YSEmptyState(config: config) { viewModel.presentCreate() }
+            settingsReachableScroll {
+                YSEmptyState(config: config) { viewModel.presentCreate() }
+            }
         case .error(let message):
             YSErrorState(message: message) { Task { await viewModel.load() } }
         case .content(let snapshot):
@@ -75,36 +86,42 @@ public struct AccountListView: View {
     }
 
     private func accountList(_ snapshot: AccountListSnapshot) -> some View {
+        settingsReachableScroll {
+            YSCard {
+                VStack(alignment: .leading, spacing: YSSpacing.xs) {
+                    Text("可用资金")
+                        .font(YSTypography.caption)
+                        .foregroundStyle(YSColor.Fallback.textSecondary)
+                    YSMoneyText(snapshot.totalAvailableFunds, style: YSTypography.amountLarge)
+                    Text("不含信用卡负债账户")
+                        .font(YSTypography.caption2)
+                        .foregroundStyle(YSColor.Fallback.textTertiary)
+                }
+            }
+            YSListSection(title: "我的账户") {
+                ForEach(snapshot.accounts) { summary in
+                    Button {
+                        viewModel.openDetail(summary)
+                    } label: {
+                        accountRow(summary)
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("编辑") { viewModel.presentEdit(summary) }
+                        Button("删除", role: .destructive) { viewModel.confirmDelete(summary) }
+                    }
+                    if summary.id != snapshot.accounts.last?.id {
+                        Divider().padding(.leading, YSSpacing.md + 28)
+                    }
+                }
+            }
+        }
+    }
+
+    private func settingsReachableScroll<Header: View>(@ViewBuilder header: () -> Header) -> some View {
         ScrollView {
             VStack(spacing: YSSpacing.md) {
-                YSCard {
-                    VStack(alignment: .leading, spacing: YSSpacing.xs) {
-                        Text("可用资金")
-                            .font(YSTypography.caption)
-                            .foregroundStyle(YSColor.Fallback.textSecondary)
-                        YSMoneyText(snapshot.totalAvailableFunds, style: YSTypography.amountLarge)
-                        Text("不含信用卡负债账户")
-                            .font(YSTypography.caption2)
-                            .foregroundStyle(YSColor.Fallback.textTertiary)
-                    }
-                }
-                YSListSection(title: "我的账户") {
-                    ForEach(snapshot.accounts) { summary in
-                        Button {
-                            viewModel.openDetail(summary)
-                        } label: {
-                            accountRow(summary)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("编辑") { viewModel.presentEdit(summary) }
-                            Button("删除", role: .destructive) { viewModel.confirmDelete(summary) }
-                        }
-                        if summary.id != snapshot.accounts.last?.id {
-                            Divider().padding(.leading, YSSpacing.md + 28)
-                        }
-                    }
-                }
+                header()
                 privacySection
                 dataBackupSection
             }
@@ -131,58 +148,19 @@ public struct AccountListView: View {
 
     private var privacySection: some View {
         YSListSection(title: "隐私与 AI") {
-            VStack(alignment: .leading, spacing: YSSpacing.sm) {
-                HStack {
-                    VStack(alignment: .leading, spacing: YSSpacing.xxs) {
-                        Text("AI 财务助手")
-                            .font(YSTypography.body.weight(.medium))
-                            .foregroundStyle(YSColor.Fallback.textPrimary)
-                        Text(assistantConsentStatusText)
-                            .font(YSTypography.caption)
-                            .foregroundStyle(YSColor.Fallback.textSecondary)
-                    }
-                    Spacer()
-                    if viewModel.assistantConsentAuthorized == true {
-                        YSBadge("已授权", tone: .positive)
-                    } else if viewModel.assistantConsentAuthorized == false {
-                        YSBadge("未授权", tone: .warning)
-                    }
-                }
-                if viewModel.assistantConsentAuthorized == true {
-                    YSButton(
-                        "撤销授权",
-                        kind: .secondary,
-                        isLoading: viewModel.isUpdatingConsent
-                    ) {
-                        Task { await viewModel.revokeAssistantConsent() }
-                    }
-                } else if viewModel.assistantConsentAuthorized == false {
-                    YSButton(
-                        "授权 AI 助手",
-                        isLoading: viewModel.isUpdatingConsent
-                    ) {
-                        Task { await viewModel.grantAssistantConsent() }
-                    }
-                }
-                if let error = viewModel.consentActionError {
-                    Text(error)
-                        .font(YSTypography.caption)
-                        .foregroundStyle(YSColor.Fallback.expense)
-                }
+            Button {
+                viewModel.openPrivacyAISettings()
+            } label: {
+                YSListRow(
+                    title: "隐私与 AI",
+                    subtitle: "管理 AI 授权与原图保留",
+                    icon: "hand.raised"
+                )
             }
-            .padding(.vertical, YSSpacing.sm)
-            .padding(.horizontal, YSSpacing.md)
+            .buttonStyle(.plain)
+            .accessibilityLabel("隐私与 AI")
+            .accessibilityIdentifier("account-privacy-ai-entry")
         }
-    }
-
-    private var assistantConsentStatusText: String {
-        if viewModel.assistantConsentAuthorized == true {
-            return "已允许 AI 读取聚合财务 Context 以回答你的问题。"
-        }
-        if viewModel.assistantConsentAuthorized == false {
-            return "尚未授权 AI 使用你的财务信息。"
-        }
-        return "正在读取授权状态…"
     }
 
     private func accountRow(_ summary: AccountSummary) -> some View {

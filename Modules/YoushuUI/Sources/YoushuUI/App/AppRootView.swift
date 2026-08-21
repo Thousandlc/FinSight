@@ -13,6 +13,7 @@ public struct AppRootView: View {
     @State private var accountViewModel: AccountViewModel
     @State private var aiViewModel: AIAssistantViewModel
     @State private var dataBackupViewModel: DataBackupViewModel
+    @State private var privacyAISettingsViewModel: PrivacyAISettingsViewModel
     @State private var bootstrapError: String?
     @State private var isBootstrapping = true
 
@@ -23,11 +24,12 @@ public struct AppRootView: View {
         let accountVM = dependencies.makeAccountViewModel(
             onDataChanged: {
                 await homeVM.load()
-            },
-            onConsentChanged: {
-                await aiVM.reloadConsent()
             }
         )
+        let privacyAISettingsVM = dependencies.makePrivacyAISettingsViewModel {
+            await aiVM.reloadConsent()
+            await homeVM.load()
+        }
         let transactionVM = dependencies.makeTransactionViewModel(onDataChanged: {
             await homeVM.load()
             await accountVM.load()
@@ -52,7 +54,8 @@ public struct AppRootView: View {
             debt: debtVM,
             debtScanner: debtScannerVM,
             account: accountVM,
-            ai: aiVM
+            ai: aiVM,
+            privacyAISettings: privacyAISettingsVM
         )
         let dataBackupVM = dependencies.makeDataBackupViewModel {
             try await ApplicationRestoreRefresh.perform(
@@ -68,6 +71,7 @@ public struct AppRootView: View {
         _debtScannerViewModel = State(initialValue: debtScannerVM)
         _aiViewModel = State(initialValue: aiVM)
         _dataBackupViewModel = State(initialValue: dataBackupVM)
+        _privacyAISettingsViewModel = State(initialValue: privacyAISettingsVM)
     }
 
     public var body: some View {
@@ -88,7 +92,8 @@ public struct AppRootView: View {
                     debtScannerViewModel: debtScannerViewModel,
                     accountViewModel: accountViewModel,
                     aiViewModel: aiViewModel,
-                    dataBackupViewModel: dataBackupViewModel
+                    dataBackupViewModel: dataBackupViewModel,
+                    privacyAISettingsViewModel: privacyAISettingsViewModel
                 )
                 .id(session.applicationDataRevision)
             }
