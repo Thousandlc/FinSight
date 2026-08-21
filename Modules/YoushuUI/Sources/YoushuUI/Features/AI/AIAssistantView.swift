@@ -86,7 +86,7 @@ public struct AIAssistantView: View {
             VStack(alignment: .leading, spacing: YSSpacing.sm) {
                 Text("财务决策入口")
                     .font(YSTypography.headline)
-                Text("基于 Account / Transaction / Debt / CashFlow 等授权 Context，AI 只负责表述。")
+                Text(PrivacyAIDisclosureCopy.assistantAskFootnote)
                     .font(YSTypography.caption2)
                     .foregroundStyle(YSColor.Fallback.textTertiary)
                 HStack(spacing: YSSpacing.sm) {

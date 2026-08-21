@@ -178,7 +178,7 @@ public final class PrivacyAISettingsViewModel {
             switch result {
             case .complete:
                 pendingMediaCleanupUserId = nil
-                wipeStatusMessage = "本地数据已删除。"
+                wipeStatusMessage = PrivacyAIDisclosureCopy.wipeSuccessMessage
                 wipePhase = .idle
             case .mediaCleanupIncomplete:
                 pendingMediaCleanupUserId = deletedUserId
@@ -201,7 +201,7 @@ public final class PrivacyAISettingsViewModel {
             try await privacyData.retryWipeMediaCleanup(userId: leftoverUserId)
             guard generation == wipeGeneration else { return }
             pendingMediaCleanupUserId = nil
-            wipeStatusMessage = "残留原图已清除。"
+            wipeStatusMessage = PrivacyAIDisclosureCopy.wipeMediaRetrySuccessMessage
             wipePhase = .idle
         } catch {
             guard generation == wipeGeneration else { return }

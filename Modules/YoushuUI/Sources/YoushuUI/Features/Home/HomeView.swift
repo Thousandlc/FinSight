@@ -142,15 +142,15 @@ public struct HomeView: View {
                         .font(YSTypography.callout)
                         .foregroundStyle(YSColor.Fallback.textSecondary)
                     Text(insight.modelName == "deterministic"
-                           ? "数字与原因来自确定性计算，AI 可后续润色表述。"
-                           : "摘要引用原始交易与债务数据，确保可追溯。")
+                           ? PrivacyAIDisclosureCopy.homeDeterministicCaption
+                           : PrivacyAIDisclosureCopy.homeAuthorizedCaption)
                         .font(YSTypography.caption2)
                         .foregroundStyle(YSColor.Fallback.textTertiary)
                 } else {
                     Text("暂无 AI 摘要")
                         .font(YSTypography.callout)
                         .foregroundStyle(YSColor.Fallback.textSecondary)
-                    Text("摘要将引用原始交易与债务数据，确保可追溯。")
+                    Text(PrivacyAIDisclosureCopy.homeEmptyCaption)
                         .font(YSTypography.caption2)
                         .foregroundStyle(YSColor.Fallback.textTertiary)
                 }

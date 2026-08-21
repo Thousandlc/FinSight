@@ -26,11 +26,11 @@ public struct PrivacyAISettingsView: View {
         .navigationBarTitleDisplayMode(.large)
         .accessibilityIdentifier("privacy-ai-settings")
         .confirmationDialog(
-            "确认删除全部本地数据？",
+            PrivacyAIDisclosureCopy.wipeConfirmationTitle,
             isPresented: deleteConfirmationBinding,
             titleVisibility: .visible
         ) {
-            Button("删除全部本地数据", role: .destructive) {
+            Button(PrivacyAIDisclosureCopy.wipeConfirmButtonTitle, role: .destructive) {
                 Task { await viewModel.confirmDeleteAllLocalData() }
             }
             .accessibilityIdentifier("privacy-ai-wipe-confirm")
@@ -39,7 +39,7 @@ public struct PrivacyAISettingsView: View {
             }
             .accessibilityIdentifier("privacy-ai-wipe-cancel")
         } message: {
-            Text("将删除本 App 内的账户、交易、债务与计划、AI 洞察与授权、以及已保留的原始图片。此操作无法从当前账本撤销。保存在「文件」中的 .finsightbackup 备份不会被自动删除。")
+            Text(PrivacyAIDisclosureCopy.wipeConfirmationMessage)
         }
         .task { await viewModel.load() }
     }
@@ -49,22 +49,22 @@ public struct PrivacyAISettingsView: View {
             VStack(alignment: .leading, spacing: YSSpacing.md) {
                 YSListSection(title: "AI 数据授权") {
                     settingRow(
-                        title: "交易截图 AI 识别",
-                        subtitle: "允许将记账截图发送给 AI 识别。关闭后不影响已记账交易。",
+                        title: PrivacyAIDisclosureCopy.screenshotSettingTitle,
+                        subtitle: PrivacyAIDisclosureCopy.screenshotSettingSubtitle,
                         field: .screenshot,
                         isOn: viewModel.allowScreenshotImageToAI
                     )
                     Divider().padding(.leading, YSSpacing.md)
                     settingRow(
-                        title: "债务图片 AI 扫描",
-                        subtitle: "允许将债务账单图片发送给 AI 扫描。关闭后不影响已确认债务。",
+                        title: PrivacyAIDisclosureCopy.debtScanSettingTitle,
+                        subtitle: PrivacyAIDisclosureCopy.debtScanSettingSubtitle,
                         field: .debtScan,
                         isOn: viewModel.allowDebtScanImageToAI
                     )
                     Divider().padding(.leading, YSSpacing.md)
                     settingRow(
-                        title: "财务上下文 AI",
-                        subtitle: "允许 AI 使用聚合财务信息回答问题。关闭后首页使用确定性摘要，历史洞察仍保留。",
+                        title: PrivacyAIDisclosureCopy.financialContextSettingTitle,
+                        subtitle: PrivacyAIDisclosureCopy.financialContextSettingSubtitle,
                         field: .financialContext,
                         isOn: viewModel.allowFinancialContextToAI
                     )
@@ -72,8 +72,8 @@ public struct PrivacyAISettingsView: View {
 
                 YSListSection(title: "本地数据") {
                     settingRow(
-                        title: "保留原始图片",
-                        subtitle: "将截图和债务扫描原图保存在本机。关闭后将删除已保留原图。这不等于授权 AI 处理图片。",
+                        title: PrivacyAIDisclosureCopy.retentionSettingTitle,
+                        subtitle: PrivacyAIDisclosureCopy.retentionSettingSubtitle,
                         field: .retainOriginalImages,
                         isOn: viewModel.retainOriginalImages
                     )
@@ -89,7 +89,7 @@ public struct PrivacyAISettingsView: View {
                     } label: {
                         VStack(alignment: .leading, spacing: YSSpacing.xxs) {
                             HStack {
-                                Text("删除全部本地数据")
+                                Text(PrivacyAIDisclosureCopy.wipeActionTitle)
                                     .font(YSTypography.body.weight(.medium))
                                     .foregroundStyle(YSColor.Fallback.expense)
                                 Spacer()
@@ -98,7 +98,7 @@ public struct PrivacyAISettingsView: View {
                                         .controlSize(.small)
                                 }
                             }
-                            Text("删除 App 内本地数据，不会删除你此前保存到「文件」中的备份。")
+                            Text(PrivacyAIDisclosureCopy.wipeActionSubtitle)
                                 .font(YSTypography.caption)
                                 .foregroundStyle(YSColor.Fallback.textSecondary)
                                 .multilineTextAlignment(.leading)
@@ -108,7 +108,7 @@ public struct PrivacyAISettingsView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(viewModel.isBusy)
-                    .accessibilityLabel("删除全部本地数据")
+                    .accessibilityLabel(PrivacyAIDisclosureCopy.wipeActionTitle)
                     .accessibilityIdentifier("privacy-ai-wipe-button")
                 }
 

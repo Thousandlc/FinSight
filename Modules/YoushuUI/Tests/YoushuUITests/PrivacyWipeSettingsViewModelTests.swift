@@ -39,7 +39,7 @@ struct PrivacyWipeSettingsViewModelTests {
         #expect(await env.users.deleteCallCount() == 1)
         #expect(try await env.container.users.fetch(id: userA) == nil)
         #expect(env.viewModel.wipePhase == .idle)
-        #expect(env.viewModel.wipeStatusMessage == "本地数据已删除。")
+        #expect(env.viewModel.wipeStatusMessage == PrivacyAIDisclosureCopy.wipeSuccessMessage)
     }
 
     @Test("L second confirm while deleting does not start another wipe")

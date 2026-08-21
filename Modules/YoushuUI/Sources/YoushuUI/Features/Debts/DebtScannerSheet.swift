@@ -66,17 +66,13 @@ public struct DebtScannerSheet: View {
         VStack(alignment: .leading, spacing: YSSpacing.lg) {
             YSCard {
                 VStack(alignment: .leading, spacing: YSSpacing.sm) {
-                    Text("搞清楚你到底欠多少钱")
+                    Text(PrivacyAIDisclosureCopy.debtScanConsentTitle)
                         .font(YSTypography.title3)
-                    Text("批量上传 5–20 张账单截图，AI 会帮你发现信用卡、分期和贷款等债务。")
-                        .font(YSTypography.body)
-                        .foregroundStyle(YSColor.Fallback.textSecondary)
-                    Text("AI 只生成候选结果，不会直接写入账本；你确认后才会创建债务。")
-                        .font(YSTypography.body)
-                        .foregroundStyle(YSColor.Fallback.textSecondary)
-                    Text("上传的财务图片仅用于识别债务信息。不会默认永久保存原图。")
-                        .font(YSTypography.caption)
-                        .foregroundStyle(YSColor.Fallback.textSecondary)
+                    ForEach(PrivacyAIDisclosureCopy.debtScanConsentLines, id: \.self) { line in
+                        Text(line)
+                            .font(YSTypography.body)
+                            .foregroundStyle(YSColor.Fallback.textSecondary)
+                    }
                 }
             }
             Spacer()

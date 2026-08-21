@@ -123,13 +123,14 @@ struct PrivacyWipeAllUserDataTests {
 
     @Test("N user-facing wipe errors omit UUID, path, and media ids")
     func failureCopySafety() {
-        let messages = [
-            PrivacyError.persistentDeletionIncomplete.userMessage,
-            PrivacyError.mediaCleanupIncomplete.userMessage,
-        ]
-        for message in messages {
-            assertNoSensitiveLeak(in: message)
-        }
+        let persistent = PrivacyError.persistentDeletionIncomplete.userMessage
+        let media = PrivacyError.mediaCleanupIncomplete.userMessage
+        assertNoSensitiveLeak(in: persistent)
+        assertNoSensitiveLeak(in: media)
+        #expect(persistent.contains("未能删除全部本地数据"))
+        #expect(media.contains("财务数据已删除"))
+        #expect(media.contains("原图"))
+        #expect(!media.contains("账本仍在"))
     }
 
     private func assertUserFullyDeleted(env: WipeEnv, userId: UUID) async throws {

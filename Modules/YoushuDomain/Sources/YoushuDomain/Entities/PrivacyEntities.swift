@@ -73,13 +73,13 @@ public struct AIDataConsent: Identifiable, Hashable, Codable, Sendable {
     public var disclosedPayloadDescriptions: [String] {
         var items: [String] = []
         if allowScreenshotImageToAI {
-            items.append("记账截图图像字节（用于交易识别，默认不落盘保存原图）")
+            items.append("记账截图（用于交易识别；是否保留原图单独控制）")
         }
         if allowDebtScanImageToAI {
-            items.append("债务账单图像字节（用于债务扫描，默认不落盘保存原图）")
+            items.append("债务账单图片（用于债务扫描；是否保留原图单独控制）")
         }
         if allowFinancialContextToAI {
-            items.append("聚合财务摘要：可用资金、本月收支与债务汇总、30天现金流摘要（含安全余额阈值）、支出分类、目标与预算摘要（不含账户/交易/债务明细及内部标识）")
+            items.append("聚合财务摘要：收支、债务与现金流等（不含内部标识、备注或不必要的交易明细）")
         }
         if items.isEmpty {
             items.append("当前未授权任何数据发送给 AI")

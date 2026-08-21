@@ -61,17 +61,13 @@ public struct ScreenshotBookkeepingSheet: View {
         VStack(alignment: .leading, spacing: YSSpacing.lg) {
             YSCard {
                 VStack(alignment: .leading, spacing: YSSpacing.sm) {
-                    Text("隐私说明")
+                    Text(PrivacyAIDisclosureCopy.screenshotConsentTitle)
                         .font(YSTypography.title3)
-                    Text("你选择的财务截图会被用于识别交易信息（金额、商户、时间等）。")
-                        .font(YSTypography.body)
-                        .foregroundStyle(YSColor.Fallback.textSecondary)
-                    Text("识别过程可能上传至 AI 服务。我们会保留临时图片引用以便追溯，但不会默认永久保存原图。")
-                        .font(YSTypography.body)
-                        .foregroundStyle(YSColor.Fallback.textSecondary)
-                    Text("AI 只提供识别草稿，不会直接写入账本；最终数据以你确认为准。")
-                        .font(YSTypography.body)
-                        .foregroundStyle(YSColor.Fallback.textSecondary)
+                    ForEach(PrivacyAIDisclosureCopy.screenshotConsentLines, id: \.self) { line in
+                        Text(line)
+                            .font(YSTypography.body)
+                            .foregroundStyle(YSColor.Fallback.textSecondary)
+                    }
                 }
             }
             Spacer()

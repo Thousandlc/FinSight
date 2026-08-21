@@ -11,12 +11,12 @@ struct AIAssistantConsentView: View {
             VStack(alignment: .leading, spacing: YSSpacing.lg) {
                 YSCard {
                     VStack(alignment: .leading, spacing: YSSpacing.sm) {
-                        Text("让 AI 帮你看懂财务")
+                        Text(PrivacyAIDisclosureCopy.assistantConsentTitle)
                             .font(YSTypography.title3)
-                        Text("为了回答你的财务问题，《知数》需要读取部分与你问题相关的财务信息，例如账户余额、交易记录、债务和现金流预测。")
+                        Text(PrivacyAIDisclosureCopy.assistantConsentBody)
                             .font(YSTypography.body)
                             .foregroundStyle(YSColor.Fallback.textSecondary)
-                        Text("AI 不会因为你使用助手而自动修改你的账户、交易或债务数据。")
+                        Text(PrivacyAIDisclosureCopy.assistantConsentGuarantee)
                             .font(YSTypography.body)
                             .foregroundStyle(YSColor.Fallback.textSecondary)
                     }
@@ -39,7 +39,7 @@ struct AIAssistantDeclinedView: View {
                 config: YSEmptyStateConfig(
                     icon: "hand.raised",
                     title: "尚未授权 AI 助手",
-                    message: "你还没有授权 AI 使用你的财务信息。",
+                    message: PrivacyAIDisclosureCopy.assistantUnauthorizedMessage,
                     actionTitle: nil
                 )
             )

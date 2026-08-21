@@ -136,9 +136,9 @@ struct BackupRestoreFlowView: View {
     private var warningCard: some View {
         YSCard {
             VStack(alignment: .leading, spacing: YSSpacing.xs) {
-                Text("恢复会替换当前设备中的知数财务数据。当前设备中不在备份里的数据将被移除。")
+                Text(PrivacyAIDisclosureCopy.backupRestoreReplaceWarning)
                     .font(YSTypography.body)
-                Text("AI 授权不会从备份恢复。历史 AI 洞察不会从备份恢复。")
+                Text(PrivacyAIDisclosureCopy.backupRestoreExclusions)
                     .font(YSTypography.caption)
                     .foregroundStyle(YSColor.Fallback.textSecondary)
             }
@@ -229,7 +229,7 @@ struct BackupRestoreFlowView: View {
     }
 
     private var destructiveConfirmationMessage: String {
-        "恢复会替换当前设备中的知数财务数据。当前设备中不在备份里的数据将被移除。AI 授权与历史 AI 洞察不会恢复。"
+        "\(PrivacyAIDisclosureCopy.backupRestoreReplaceWarning) \(PrivacyAIDisclosureCopy.backupRestoreExclusions)"
     }
 
     private func confirmRestore() async {

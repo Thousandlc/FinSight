@@ -21,7 +21,7 @@ public enum PrivacyError: Error, Equatable, Sendable {
     public var userMessage: String {
         switch self {
         case .consentRequired(let scope):
-            return "尚未授权「\(scope)」相关数据发送给 AI，请先在隐私设置中确认。"
+            return "尚未授权「\(Self.displayName(forConsentScope: scope))」相关数据发送给 AI，请先在隐私设置中确认。"
         case .deletionFailed:
             return "删除未能完成，请稍后重试。若问题持续，可尝试清除全部本地数据。"
         case .mediaUnavailable:
@@ -31,11 +31,20 @@ public enum PrivacyError: Error, Equatable, Sendable {
         case .operationFailed:
             return "操作失败，未泄漏任何敏感数据。请稍后重试。"
         case .retentionCleanupFailed:
-            return "原图保留已关闭，但部分已保留原图未能清除，请稍后重试。"
+            return "已停止保留新原图，但部分之前保留的图片未能删除。你可以重试清理。"
         case .persistentDeletionIncomplete:
             return "未能删除全部本地数据，请稍后重试。"
         case .mediaCleanupIncomplete:
-            return "本地账本已删除，但部分已保留原图未能清除。"
+            return "本地财务数据已删除，但部分之前保留的原图未能清除。你可以重试清理。"
+        }
+    }
+
+    private static func displayName(forConsentScope scope: String) -> String {
+        switch scope {
+        case "财务助手 Context":
+            return "财务上下文"
+        default:
+            return scope
         }
     }
 }

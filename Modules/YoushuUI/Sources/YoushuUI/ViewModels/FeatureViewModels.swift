@@ -224,7 +224,7 @@ public final class AIAssistantViewModel {
         }
     }
 
-    private static let unauthorizedMessage = "你还没有授权 AI 使用你的财务信息。"
+    private static let unauthorizedMessage = PrivacyAIDisclosureCopy.assistantUnauthorizedMessage
 
     private static func userFacingError(_ error: Error) -> String {
         if let privacy = error as? PrivacyError, case .consentRequired = privacy {

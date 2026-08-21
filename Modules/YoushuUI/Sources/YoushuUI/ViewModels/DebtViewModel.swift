@@ -230,7 +230,7 @@ public final class DebtViewModel {
     public static let emptyConfig = YSEmptyStateConfig(
         icon: "creditcard",
         title: "搞清楚你到底欠多少钱",
-        message: "批量上传账单截图，AI 帮你发现债务；也可以手动添加。",
+        message: PrivacyAIDisclosureCopy.debtEmptyStateMessage,
         actionTitle: "开始扫描我的债务"
     )
 }
