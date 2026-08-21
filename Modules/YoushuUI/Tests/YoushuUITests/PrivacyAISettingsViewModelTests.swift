@@ -258,7 +258,7 @@ struct PrivacyAISettingsViewModelTests {
             session: session
         )
         await viewModel.load()
-        repository.failUpsert = true
+        await repository.setFailUpsert(true)
 
         await viewModel.setScreenshotAIEnabled(true)
         #expect(!viewModel.allowScreenshotImageToAI)
@@ -306,43 +306,27 @@ struct PrivacyAISettingsViewModelTests {
     }
 }
 
-private final class ControllableConsentRepository: AIDataConsentRepository, @unchecked Sendable {
+private actor ControllableConsentRepository: AIDataConsentRepository {
     private var storage: [UUID: AIDataConsent] = [:]
-    private let lock = NSLock()
     private var failUpsertEnabled = false
 
-    var failUpsert: Bool {
-        get {
-            lock.lock()
-            defer { lock.unlock() }
-            return failUpsertEnabled
-        }
-        set {
-            lock.lock()
-            failUpsertEnabled = newValue
-            lock.unlock()
-        }
+    func setFailUpsert(_ value: Bool) {
+        failUpsertEnabled = value
     }
 
     func upsert(_ consent: AIDataConsent) async throws {
-        if failUpsert {
+        if failUpsertEnabled {
             throw PrivacyError.operationFailed
         }
-        lock.lock()
         storage[consent.userId] = consent
-        lock.unlock()
     }
 
     func fetch(userId: UUID) async throws -> AIDataConsent? {
-        lock.lock()
-        defer { lock.unlock() }
-        return storage[userId]
+        storage[userId]
     }
 
     func delete(userId: UUID) async throws {
-        lock.lock()
         storage.removeValue(forKey: userId)
-        lock.unlock()
     }
 }
 
