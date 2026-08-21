@@ -1,0 +1,168 @@
+name: iOS Apple Integration Gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios-apple-gate:
+    name: Step 5C — iOS Build + Tests
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Static repository checks
+        run: |
+          set -euo pipefail
+          test -f project.yml
+          test -f scripts/test-ios.sh
+          test -z "$(git status --porcelain)"
+
+      - name: Apple environment diagnostics
+        run: |
+          set -euo pipefail
+          echo "=== sw_vers ==="
+          sw_vers
+          echo "=== uname -m ==="
+          uname -m
+          echo "=== xcode-select -p ==="
+          xcode-select -p
+          echo "=== xcodebuild -version ==="
+          xcodebuild -version
+          echo "=== swift --version ==="
+          swift --version
+          echo "=== simctl runtimes ==="
+          xcrun simctl list runtimes
+          echo "=== simctl devices available ==="
+          xcrun simctl list devices available
+
+      - name: Verify Xcode 16+
+        run: |
+          set -euo pipefail
+          xcode_major="$(xcodebuild -version | sed -n '1s/Xcode \([0-9][0-9]*\).*/\1/p')"
+          if [[ -z "${xcode_major}" || "${xcode_major}" -lt 16 ]]; then
+            if [[ -d "/Applications/Xcode_16.4.app" ]]; then
+              echo "Selecting /Applications/Xcode_16.4.app"
+              sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+            else
+              echo "Xcode 16+ required; found: $(xcodebuild -version | head -1)"
+              exit 1
+            fi
+          fi
+          echo "Using Xcode:"
+          xcodebuild -version
+          echo "Developer directory:"
+          xcode-select -p
+
+      - name: Install or verify XcodeGen
+        run: |
+          set -euo pipefail
+          if ! command -v xcodegen >/dev/null; then
+            brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Resolve Swift package dependencies
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project Youshu.xcodeproj \
+            -scheme Youshu \
+            -resolvePackageDependencies
+          swift package resolve
+
+      - name: Run iOS integration gate
+        run: bash ./scripts/test-ios.sh
+
+      - name: Verify processed Info.plist backup UTType
+        run: |
+          set -euo pipefail
+          DESTINATION="$(
+            xcodebuild \
+              -project Youshu.xcodeproj \
+              -scheme Youshu \
+              -showdestinations 2>/dev/null \
+              | awk -F'[ ,]' '/platform:iOS Simulator/ && /OS:/ && /name:/ {print; exit}' \
+              | sed -n 's/.*id:\([^,]*\).*/platform=iOS Simulator,id=\1/p'
+          )"
+          if [[ -z "${DESTINATION}" ]]; then
+            echo "No simulator destination for Info.plist verification."
+            exit 1
+          fi
+
+          BUILT_PRODUCTS_DIR="$(
+            xcodebuild \
+              -project Youshu.xcodeproj \
+              -scheme Youshu \
+              -destination "${DESTINATION}" \
+              -showBuildSettings 2>/dev/null \
+              | awk -F' = ' '/^[[:space:]]*BUILT_PRODUCTS_DIR/ {print $2; exit}'
+          )"
+
+          PLIST="${BUILT_PRODUCTS_DIR}/Youshu.app/Info.plist"
+          if [[ ! -f "${PLIST}" ]]; then
+            PLIST="$(
+              find "${HOME}/Library/Developer/Xcode/DerivedData" \
+                -path "*/Build/Products/Debug-iphonesimulator/Youshu.app/Info.plist" \
+                -type f 2>/dev/null \
+                | while IFS= read -r candidate; do
+                    printf '%s %s\n' "$(stat -f %m "${candidate}")" "${candidate}"
+                  done \
+                | sort -rn \
+                | head -1 \
+                | cut -d' ' -f2-
+            )"
+          fi
+
+          if [[ -z "${PLIST}" || ! -f "${PLIST}" ]]; then
+            echo "Processed Info.plist not found."
+            exit 1
+          fi
+
+          echo "Verifying Info.plist: ${PLIST}"
+          plutil -lint "${PLIST}"
+
+          EXPORT_COUNT="$(
+            /usr/libexec/PlistBuddy -c "Print :UTExportedTypeDeclarations" "${PLIST}" 2>/dev/null \
+              | grep -c "UTTypeIdentifier = app.finsight.backup" || true
+          )"
+          DOC_COUNT="$(
+            /usr/libexec/PlistBuddy -c "Print :CFBundleDocumentTypes" "${PLIST}" 2>/dev/null \
+              | grep -c "app.finsight.backup" || true
+          )"
+          EXT_COUNT="$(
+            /usr/libexec/PlistBuddy -c "Print :UTExportedTypeDeclarations:0:UTTypeTagSpecification:public.filename-extension" "${PLIST}" 2>/dev/null \
+              | grep -c "finsightbackup" || true
+          )"
+          CONFORMS_COUNT="$(
+            /usr/libexec/PlistBuddy -c "Print :UTExportedTypeDeclarations:0:UTTypeConformsTo" "${PLIST}" 2>/dev/null \
+              | grep -c "public.data" || true
+          )"
+
+          echo "UTExportedTypeDeclarations app.finsight.backup matches: ${EXPORT_COUNT}"
+          echo "CFBundleDocumentTypes app.finsight.backup matches: ${DOC_COUNT}"
+          echo "finsightbackup extension matches: ${EXT_COUNT}"
+          echo "public.data conformance matches: ${CONFORMS_COUNT}"
+
+          if [[ "${EXPORT_COUNT}" -ne 1 || "${DOC_COUNT}" -lt 1 || "${EXT_COUNT}" -lt 1 || "${CONFORMS_COUNT}" -lt 1 ]]; then
+            echo "Backup UTType declaration verification failed."
+            /usr/libexec/PlistBuddy -c "Print :UTExportedTypeDeclarations" "${PLIST}" || true
+            /usr/libexec/PlistBuddy -c "Print :CFBundleDocumentTypes" "${PLIST}" || true
+            exit 1
+          fi
+
+          echo "Processed Info.plist backup UTType verification passed."
+
+      - name: Confirm expected test targets are present in scheme
+        run: |
+          set -euo pipefail
+          xcodebuild -project Youshu.xcodeproj -scheme Youshu -showTestPlans 2>/dev/null || true
+          xcodebuild -project Youshu.xcodeproj -scheme Youshu -list
