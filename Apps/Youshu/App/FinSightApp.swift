@@ -7,8 +7,8 @@ import YoushuUI
 struct FinSightApp: App {
     private let dependencies = AppDependencies(
         repositories: .fileBacked(url: Self.storeURL),
-        mediaBinaryRootURL: Self.mediaOriginalsRootURL,
-        sourceAppVersionProvider: { AppVersionProvider.currentVersionString() }
+        sourceAppVersionProvider: { AppVersionProvider.currentVersionString() },
+        mediaBinaryRootURL: Self.mediaOriginalsRootURL
     )
 
     var body: some Scene {
