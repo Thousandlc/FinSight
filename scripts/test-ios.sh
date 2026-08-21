@@ -27,16 +27,19 @@ fi
 
 echo "Using destination: ${DESTINATION}"
 
-XCODEBUILD_EXTRA=()
-if [[ "${GITHUB_ACTIONS:-}" != "true" ]]; then
-  XCODEBUILD_EXTRA=(-quiet)
+if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  xcodebuild \
+    -project Youshu.xcodeproj \
+    -scheme Youshu \
+    -destination "${DESTINATION}" \
+    test
+else
+  xcodebuild \
+    -project Youshu.xcodeproj \
+    -scheme Youshu \
+    -destination "${DESTINATION}" \
+    -quiet \
+    test
 fi
-
-xcodebuild \
-  -project Youshu.xcodeproj \
-  -scheme Youshu \
-  -destination "${DESTINATION}" \
-  "${XCODEBUILD_EXTRA[@]}" \
-  test
 
 echo "iOS build and Youshu scheme tests succeeded."
