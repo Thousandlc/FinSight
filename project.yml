@@ -1,98 +1,104 @@
-name: Youshu
-options:
-  bundleIdPrefix: app.youshu
-  deploymentTarget:
-    iOS: "17.0"
-  createIntermediateGroups: true
-  xcodeVersion: "16.0"
-settings:
-  BASE_SDK: iphoneos
-  SWIFT_VERSION: "6.0"
-packages:
-  Youshu:
-    path: .
-  YoushuUIPackages:
-    path: Modules
-targets:
-  Youshu:
-    type: application
-    platform: iOS
-    sources:
-      - path: Apps/Youshu/App
-    info:
-      path: Apps/Youshu/App/Info.plist
-      properties:
-        CFBundleDocumentTypes:
-          - CFBundleTypeName: FinSight Backup
-            LSHandlerRank: Owner
-            LSItemContentTypes:
-              - app.finsight.backup
-        UTExportedTypeDeclarations:
-          - UTTypeIdentifier: app.finsight.backup
-            UTTypeDescription: FinSight Encrypted Backup
-            UTTypeConformsTo:
-              - public.data
-            UTTypeTagSpecification:
-              public.filename-extension:
-                - finsightbackup
-    settings:
-      PRODUCT_BUNDLE_IDENTIFIER: app.youshu.Youshu
-      INFOPLIST_KEY_CFBundleDisplayName: 知数
-      INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-      INFOPLIST_KEY_UILaunchScreen_Generation: YES
-      TARGETED_DEVICE_FAMILY: "1,2"
-    dependencies:
-      - package: YoushuUIPackages
-        product: YoushuUI
-      - package: YoushuUIPackages
-        product: YoushuDesignSystem
-      - package: Youshu
-        product: YoushuData
-      - package: Youshu
-        product: YoushuAI
-  YoushuDomainTests:
-    type: bundle.unit-test
-    platform: iOS
-    sources:
-      - path: Modules/YoushuDomain/Tests/YoushuDomainTests
-    dependencies:
-      - package: Youshu
-        product: YoushuDomain
-  YoushuDataTests:
-    type: bundle.unit-test
-    platform: iOS
-    sources:
-      - path: Modules/YoushuData/Tests/YoushuDataTests
-    dependencies:
-      - package: Youshu
-        product: YoushuData
-      - package: Youshu
-        product: YoushuDomain
-  YoushuUITests:
-    type: bundle.unit-test
-    platform: iOS
-    sources:
-      - path: Modules/YoushuUI/Tests/YoushuUITests
-    dependencies:
-      - package: YoushuUIPackages
-        product: YoushuUI
-      - package: YoushuUIPackages
-        product: YoushuDesignSystem
-      - package: Youshu
-        product: YoushuData
-      - package: Youshu
-        product: YoushuDomain
-      - package: Youshu
-        product: YoushuAI
-schemes:
-  Youshu:
-    build:
-      targets:
-        Youshu: all
-    run:
-      config: Debug
-    test:
-      targets:
-        - YoushuUITests
-        - YoushuDataTests
-        - YoushuDomainTests
+name: Youshu
+options:
+  bundleIdPrefix: app.youshu
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  xcodeVersion: "16.0"
+settings:
+  BASE_SDK: iphoneos
+  SWIFT_VERSION: "6.0"
+packages:
+  Youshu:
+    path: .
+  YoushuUIPackages:
+    path: Modules
+targets:
+  Youshu:
+    type: application
+    platform: iOS
+    sources:
+      - path: Apps/Youshu/App
+    info:
+      path: Apps/Youshu/App/Info.plist
+      properties:
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: FinSight Backup
+            LSHandlerRank: Owner
+            LSItemContentTypes:
+              - app.finsight.backup
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: app.finsight.backup
+            UTTypeDescription: FinSight Encrypted Backup
+            UTTypeConformsTo:
+              - public.data
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - finsightbackup
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: app.youshu.Youshu
+      INFOPLIST_KEY_CFBundleDisplayName: 知数
+      INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+      INFOPLIST_KEY_UILaunchScreen_Generation: YES
+      TARGETED_DEVICE_FAMILY: "1,2"
+    dependencies:
+      - package: YoushuUIPackages
+        product: YoushuUI
+      - package: YoushuUIPackages
+        product: YoushuDesignSystem
+      - package: Youshu
+        product: YoushuData
+      - package: Youshu
+        product: YoushuAI
+  YoushuDomainTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Modules/YoushuDomain/Tests/YoushuDomainTests
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - package: Youshu
+        product: YoushuDomain
+  YoushuDataTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Modules/YoushuData/Tests/YoushuDataTests
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - package: Youshu
+        product: YoushuData
+      - package: Youshu
+        product: YoushuDomain
+  YoushuUITests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Modules/YoushuUI/Tests/YoushuUITests
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - package: YoushuUIPackages
+        product: YoushuUI
+      - package: YoushuUIPackages
+        product: YoushuDesignSystem
+      - package: Youshu
+        product: YoushuData
+      - package: Youshu
+        product: YoushuDomain
+      - package: Youshu
+        product: YoushuAI
+schemes:
+  Youshu:
+    build:
+      targets:
+        Youshu: all
+    run:
+      config: Debug
+    test:
+      targets:
+        - YoushuUITests
+        - YoushuDataTests
+        - YoushuDomainTests
