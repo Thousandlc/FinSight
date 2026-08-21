@@ -2,7 +2,7 @@
 
 > 文档角色：项目当前存档点 / 新 Chat 恢复入口  
 > 版本：v1.0  
-> **Last Updated：2026-08-20（ADR-032 Stored Insight Freshness / Lifecycle Closure）**  
+> **Last Updated：2026-08-21（ADR-033 Backup / Restore v1 Context Sync）**  
 > 本文件应频繁更新；旧状态不应无限累积，重大历史移入 Decision Log。
 
 ---
@@ -68,7 +68,28 @@ XcodeGen
 Swift / SwiftUI
 Domain / Data / AI / UI 分层
 Local JSON Store
+Manual Portable Backup v1（encrypted .finsightbackup）
 ```
+
+### Swift Package 拓扑（2026-08-21）
+
+Canonical entry points：
+
+```text
+root Package.swift
+→ shared Domain / Data / AI + Windows tests
+
+Modules/Package.swift
+→ canonical UI package for Xcode（YoushuDesignSystem / YoushuUI / YoushuUIPreviewMocks）
+```
+
+**P2 follow-up（非 milestone blocker）：** `AppPackages/YoushuUIPackages/Package.swift` 与 `Package.resolved` 为 legacy/dead duplicate artifacts，待后续 hygiene 删除。**尚未删除。**
+
+### GitHub / Apple CI（当前工程状态）
+
+- 仓库 remote：`Thousandlc/FinSight`（private）
+- Apple-only integration gate：GitHub Actions `ios-apple-gate.yml`（`workflow_dispatch`, `macos-15`）
+- 当前 Apple Backup/Restore gate：**green**（run **32443787799**, HEAD `967c0c5`, Xcode **16.4**）
 
 历史代码模块：
 
@@ -532,10 +553,45 @@ RemoteFinancialAIProvider
 
 ## 16. 测试状态
 
-### 2026-08-20 ADR-032 Step 5A — 当前实测基线
+### 2026-08-21 Backup / Restore v1 Step 6 — 当前实测基线
+
+以下数字来自 **2026-08-21 Step 6 final verification**（Windows + Apple 两个 platform gates；**不得** 将 532 + 471 相加为 unique tests — 大量 Domain/Data tests overlap）。
+
+**Windows gate**（`scripts/test-windows.bat` + `swift build -c release`）：
+
+```text
+Foundation:  10 passed
+Domain:     362 passed
+Data:        99 passed
+AI:          61 passed
+Total:      532 passed
+Failed:       0
+
+swift build -c release: PASS
+```
+
+**Apple gate**（GitHub Actions run **32443787799**, HEAD `967c0c5`, Xcode **16.4**, iOS Simulator）：
+
+```text
+YoushuUITests:      10 passed
+YoushuDataTests:    99 passed
+YoushuDomainTests: 362 passed
+Total:             471 passed
+Failed:              0
+
+Processed Info.plist: app.finsight.backup / .finsightbackup verified
+```
+
+Gateway tests：
+
+```text
+NOT rerun for Backup/Restore v1 because Gateway code/contracts were unchanged.
+```
+
+### 2026-08-20 ADR-032 Step 5A — 历史基线（归档）
 
 以下数字来自 **2026-08-20 ADR-032 Step 5A full regression**（Step 5B docs-only 同步轮次未重跑）。
-以后仍必须以 **每轮真实测试** 为准，不能把本文当作永久 CI 状态。
+**不再是当前基线。**
 
 ```text
 Swift (scripts/test-windows.bat):
@@ -546,16 +602,9 @@ Data:         6 passed
 AI:          61 passed
 Total:      427 passed
 Failed:       0
-Skipped:      0
 
 iOS Build:
   NOT RUN — Windows environment limitation
-```
-
-Gateway tests：
-
-```text
-NOT rerun for ADR-032 because Gateway code/contracts were unchanged.
 ```
 
 关键回归包括：
@@ -630,6 +679,8 @@ Domain 314 / Data 6 / AI 61 / Total 381
 
 ## 17. 数据持久化
 
+### Live JSON Store
+
 当前：
 
 ```text
@@ -644,15 +695,57 @@ Legacy path：
 Application Support/Youshu/youshu-store.json
 ```
 
-当前已知重大缺口：
+**不得随意 rename**（ADR-022）。
 
-- iCloud：未建立
-- Export：未建立
-- Backup：未建立
-- 卸载：存在数据丢失风险
-- 换机：缺少数据恢复链路
+### Backup / Restore v1 — IMPLEMENTED / APPLE-CI VERIFIED（2026-08-21）
 
-进入真实长期自用前，这一项应提升优先级。
+```text
+Status: IMPLEMENTED / APPLE-CI VERIFIED
+ADR:    ADR-033
+Date:   2026-08-21
+```
+
+能力摘要：
+
+- manual encrypted portable backup（`.finsightbackup` / `app.finsight.backup`）
+- Files exporter / importer
+- full-replace transactional restore + application refresh
+- privacy exclusions：`FinancialInsight`, `AIDataConsent`, AI recognition / media / debt-scan candidates 不迁移；restore 后 consent → deniedDefault
+
+**不是：** CloudKit sync、automatic iCloud backup、human-readable Export、multi-device merge/sync。
+
+### 仍开放的 persistence / migration 风险
+
+- human-readable **Export**：未建立
+- **automatic / cloud backup**：未建立
+- **CloudKit / live multi-device sync**：未建立
+- 卸载仍可能丢失 **未外置保存** 的 live local data
+- 换机 / recovery **仅当用户曾创建并保留 backup** 时才有路径 — **不等于** device migration 已完全解决
+- physical-device Files smoke：**NOT RUN** — **PRE-RELEASE MANUAL ACCEPTANCE GATE**（见 §17.1）
+
+### 17.1 Physical iPhone Files smoke — NOT RUN
+
+**Classification：PRE-RELEASE MANUAL ACCEPTANCE GATE**
+
+Release / TestFlight readiness 前建议手动验证：
+
+```text
+1. Install release/TestFlight-capable build on iPhone
+2. Create encrypted backup
+3. Save via Files（On My iPhone / iCloud Drive）
+4. Confirm .finsightbackup exists
+5. Modify local financial data
+6. Import backup
+7. Verify safe preview
+8. Confirm full replacement
+9. Verify restored facts
+10. Verify newer local-only facts disappeared
+11. Verify AI consent is denied
+12. Verify historical AI insight is absent
+13. Relaunch app — confirm restored data durable
+```
+
+**不是** v1 implementation milestone blocker；**是** release-readiness verification item。
 
 ---
 
@@ -712,12 +805,21 @@ Trust 与 Freshness / Consent 是 **三个独立维度**（见 §18.2）。
 
 ### P1 级
 
-4. **Backup / Export / device migration 缺失**
-5. **Production observability 不完整**
-6. **Token / cost telemetry 尚未完全接 production**
-7. **隐私设置 UI 覆盖度需重新核验**（含 `retainOriginalImages`）
-8. **真实图片识别准确率缺少稳定 baseline**
-9. **大数据量 JSON Store 性能未压测**
+4. **human-readable Export — STILL OPEN**
+5. **automatic / cloud backup — STILL OPEN**
+6. **CloudKit / live multi-device sync — STILL OPEN**
+7. **physical-device Files smoke — NOT RUN**（pre-release manual gate；见 §17.1）
+8. **Production observability 不完整**
+9. **Token / cost telemetry 尚未完全接 production**
+10. **隐私设置 UI 覆盖度需重新核验**（含 `retainOriginalImages`）
+11. **真实图片识别准确率缺少稳定 baseline**
+12. **大数据量 JSON Store 性能未压测**
+
+### RESOLVED / CLOSED（2026-08-21 — ADR-033）
+
+- **manual encrypted Backup / full-replace Restore** — IMPLEMENTED / APPLE-CI VERIFIED
+
+旧 P1「Backup / Export / device migration 缺失」**不得** 继续作为单一未拆分条目保留。
 
 ### 代码质量
 
@@ -725,7 +827,7 @@ Trust 与 Freshness / Consent 是 **三个独立维度**（见 §18.2）。
 
 - DebtScannerSheet 偏大
 - DebtViewModel 偏大
-- 双 Package / 项目结构维护成本
+- legacy `AppPackages/YoushuUIPackages` duplicate SPM manifest（P2 cleanup pending — 见 §3）
 - NoOp / mock path 的生产替换
 - UI / snapshot / performance tests 不完整
 
@@ -746,7 +848,7 @@ Trust 与 Freshness / Consent 是 **三个独立维度**（见 §18.2）。
 5. 完成 error taxonomy。
 6. 完成 observability 设计与本地验证。
 7. 修复 remote-AI-to-Home 的耦合架构。
-8. 建立 Backup / Export 方案。
+8. ~~建立 Backup / Export 方案。~~ **Backup v1 已实现（ADR-033）；Export / cloud backup 仍开放。**
 9. 补 Consent / Privacy UI。
 10. 真机仅验证不依赖公网 AI 的本地能力（若环境条件允许）。
 
@@ -805,7 +907,7 @@ domain / DNS
 - Bailian real smoke 完成
 - TestFlight 构建成功
 - 数据存储迁移
-- Backup / Export 完成
+- Backup / Restore v1 实现与 verification 完成（ADR-033）
 - 模块 rename
 - 大 milestone 完成
 - 全量测试数字发生显著变化
@@ -816,4 +918,4 @@ domain / DNS
 
 ## 22. 当前一句话存档
 
-**截至 2026-08-20，FinSight 的核心财务 Domain、现金流（7/30/60/90）、多债务、Consent、AI Context、Answer Validator、Stored Insight trust boundary（VERIFIED SAFE）、ADR-032 Stored Insight freshness/lifecycle（RESOLVED）、FinancialRiskPolicyEngine（regression-covered）、C2B KeyFact / Gateway materialization 与 ADR-020 Home AI failure isolation（FIXED）已建立到较成熟的内部 MVP 阶段；Swift 当前基线 **427 tests PASS**（iOS build NOT RUN）；Gateway ECS 运行态仅保留 2026-08-18 documented snapshot；Gateway tests NOT rerun for ADR-032；ICP 备案 pending，公网 HTTPS、iOS production wiring 与真实 Bailian production smoke 仍明确禁止。**
+**截至 2026-08-21，FinSight 的核心财务 Domain、现金流（7/30/60/90）、多债务、Consent、AI Context、Answer Validator、Stored Insight trust boundary（VERIFIED SAFE）、ADR-032 Stored Insight freshness/lifecycle（RESOLVED）、FinancialRiskPolicyEngine（regression-covered）、C2B KeyFact / Gateway materialization、ADR-020 Home AI failure isolation（FIXED）、以及 ADR-033 manual encrypted Backup / full-replace Restore（IMPLEMENTED / APPLE-CI VERIFIED）已建立到较成熟的内部 MVP 阶段；Windows 当前基线 **532 tests PASS** + release build PASS；Apple gate **471 tests PASS**（run 32443787799, Xcode 16.4）；physical-device Files smoke NOT RUN；Gateway ECS 运行态仅保留 2026-08-18 documented snapshot；ICP 备案 pending，公网 HTTPS、iOS production wiring 与真实 Bailian production smoke 仍明确禁止。**

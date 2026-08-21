@@ -2,7 +2,7 @@
 
 > 文档角色：架构 / 产品重大决策记录（ADR Index）  
 > 版本：v1.0  
-> 更新日期：2026-08-20  
+> 更新日期：2026-08-21  
 > 使用方式：以后任何与下列结论冲突的修改，都应先新增 ADR 说明“为什么改变”，而不是静默回退。
 
 ---
@@ -448,7 +448,9 @@ SwiftData 尚未作为当前事实存储实现。
 
 - 大数据性能能力有限
 - 无索引
-- Backup / iCloud 缺失
+- iCloud / 自动云备份 / 实时多设备同步 仍缺失
+
+**更新（2026-08-21）：** 手动便携式加密 Backup v1 与 transactional full-replace Restore 已通过 ADR-033 落地；这不改变 JSON Store 仍是当前 live persistence 的事实，也不等于 iCloud 或自动备份已实现。
 
 MVP 可接受，但需持续评估。
 
@@ -946,6 +948,343 @@ Optional nil consent service 默认值仍然存在，但仅属于 **test / dev A
 ### Relationship
 
 Supports / relates to: ADR-012, ADR-013, ADR-015, ADR-020, ADR-021, ADR-027, ADR-031
+
+---
+
+## ADR-033 — Portable encrypted Backup v1 and transactional full-replace Restore
+
+**日期：2026-08-21**  
+**状态：Accepted / Implemented — VERIFIED 2026-08-21**
+
+### Context
+
+FinSight 当前 live persistence 仍是 JSON Document Store（ADR-021，schema v4）。在 ADR-033 之前，用户缺少一条 **用户可控、可携带、可加密** 的财务事实恢复路径；换机 / 卸载 / 本地数据丢失风险无法仅靠 live store 解决。
+
+Backup / Restore v1 的目标不是 Cloud Sync，也不是 human-readable Export，而是在 **Files 生态** 中提供 **manual portable encrypted backup + full-replace restore**，并严格遵守 privacy / consent / transactional persistence 边界。
+
+### Decision
+
+#### A. Backup ≠ Export ≠ Cloud Sync
+
+Backup v1 是：
+
+```text
+manual
+portable
+encrypted
+user-controlled
+Files-based
+full-replace restore
+```
+
+Backup v1 **不是**：
+
+- human-readable Export
+- Cloud Sync
+- multi-device live synchronization
+- FinSight 实现的 CloudKit / 自动 iCloud 备份
+
+用户可通过系统 Files 将 `.finsightbackup` 保存到 On My iPhone / iCloud Drive / 其他 Files provider，但 FinSight **不实现** CloudKit sync、automatic iCloud backup、multi-device merge/sync。
+
+不得将 Backup v1 描述为 “iCloud support”。
+
+#### B. Backup content boundary
+
+Backup v1 是 **financial-facts-oriented portable payload**，不是 raw `YoushuSnapshot` 拷贝，也不是 JSON Store schema 的直接镜像。
+
+当前 backed-up durable facts（`BackupPayloadV1` / `BackupFinancialDataV1`）包括：
+
+```text
+BackupUserV1
+Account
+Transaction
+Debt
+DebtEvent
+RepaymentPlan
+Asset
+Goal
+Budget
+Subscription
+```
+
+实体间关系所需的 UUID 可保留在加密 artifact 内，用于 restore 后重建关系。
+
+**不得** 声称 Backup 包含 entire `YoushuSnapshot`。
+
+#### C. Explicit exclusions（privacy / trust lifecycle）
+
+Backup v1 **故意不** backup / restore / carry forward：
+
+```text
+FinancialInsight
+AIDataConsent
+AIRecognitionRecord
+MediaArtifact
+PendingDebtLink
+SuspectedDebt
+```
+
+Restore 后：
+
+```text
+User.debtImportInProgress = false
+```
+
+后果：
+
+- `AIDataConsent` 缺失 → `AIDataConsentService.fetchOrDefault` → **deniedDefault**
+- 历史 AI insight **不** 通过 backup 迁移
+- restore **不** 触发 remote AI generation
+
+这是 **intentional privacy/trust lifecycle behavior**，不是 data loss bug。
+
+Derived read models **不是** backup facts，restore 后由 engines 自 restored facts 重算，例如：
+
+```text
+FinancialSummary
+CashFlowProjection / CashFlowRisk
+FinancialRiskAssessment
+HomeOverview
+其他 deterministic read models
+```
+
+#### D. Encryption contract（Backup Format v1）
+
+```text
+PBKDF2-HMAC-SHA256
+600,000 iterations
+256-bit key
+AES-256-GCM
+random salt
+random nonce
+authenticated envelope
+```
+
+v1 参数：
+
+```text
+salt   16 bytes
+nonce  12 bytes
+tag    16 bytes
+whole backup file maximum 64 MiB
+```
+
+Backup format version（`BackupPayloadV1.formatVersion`）**独立 versioning**，与 JSON Store schema version **解耦**。
+
+`sourceStoreSchemaVersion` 仅为 provenance metadata，**不是** restore compatibility authority。
+
+#### E. Passphrase contract
+
+- non-empty passphrase enforced below UI
+- exact string is cryptographic input
+- **no trim / normalization**
+- **no complexity policy in v1**
+- whitespace-only passphrase is **not forbidden**（non-empty only）
+- passphrase **not persisted**（无 UserDefaults / AppStorage / Keychain / logging）
+- FinSight **cannot recover** a lost backup passphrase
+
+#### F. Restore = FULL REPLACE
+
+Restore v1 = **FULL REPLACE**，不是 merge / import-additive / record-by-record reconciliation。
+
+Successful restore **removes** current-device-only financial records not present in backup candidate。
+
+未来若改为 merge，**必须** 新 ADR，不得静默改变 v1 语义。
+
+#### G. Untrusted external artifact
+
+External backup file remains **untrusted** even after Files selection。
+
+Restore pipeline：
+
+```text
+encrypted Data
+→ BackupCodec.decode / authenticate
+→ BackupPayloadV1Validator
+→ BackupRestoreCandidateBuilder
+→ BackupRestoreCandidateValidator
+→ transactional store replacement
+```
+
+Preflight：
+
+- uses same validation pipeline
+- **performs no store mutation**
+
+Commit **does not trust** preview / cached plaintext candidate / preflight token。
+
+Commit **independently re-decodes and re-validates** original encrypted `Data`。
+
+#### H. Exact bytes preview-to-commit（anti-TOCTOU）
+
+```text
+Files URL
+→ bounded security-scoped read
+→ immutable encrypted Data
+→ preflight
+→ destructive confirmation
+→ restore commit using the SAME Data
+```
+
+External URL **not re-read** after preview。
+
+Security-scoped access exists **only during bounded read**。
+
+No plaintext temporary backup file。
+
+#### I. Transactional persistence
+
+`YoushuStore` actor restore transaction：
+
+```text
+retain previous snapshot
+→ encode candidate using current store rules
+→ atomic candidate write
+→ re-read actual persisted file
+→ decode through current store path
+→ verify candidate
+→ publish candidate in-memory only after verification
+```
+
+**禁止** restore 实现为：
+
+```text
+wipeAllUserData()
+→ reconstruct records
+```
+
+Post-write verification failure：
+
+```text
+rollback previous persisted representation
+→ re-read
+→ verify rollback
+```
+
+Memory remains previous until successful commit。
+
+#### J. Critical rollback failure
+
+三类 restore failure：
+
+```text
+validationFailure
+commitFailure          → rollback verified / known previous state
+criticalPersistenceFailure → rollbackFailed
+```
+
+`rollbackFailed` 表示 durability state **cannot be confidently asserted**。
+
+必须 distinguishable from ordinary restore failure。
+
+UI **must not** show normal success or assume known-good persisted state。
+
+No automatic destructive recovery in v1。
+
+#### K. Application refresh contract
+
+Every successful full-replace restore requires application data refresh，**even if restored `User.id` is unchanged**。
+
+Reason：same identity ≠ same financial data。
+
+Current behavior：
+
+```text
+restore success
+→ AppSession resync from store
+→ applicationDataRevision bump
+→ transient ViewModel reset
+→ financial presentation reload
+→ MainTabView presentation subtree recreation
+```
+
+If restored user IDs differ：restored backup identity becomes authoritative。**No User ID remapping**。
+
+`BackupRestoreResult.requiresApplicationReload == true` on successful full-replace restore。
+
+`userIdentityChanged` is separate identity-handoff metadata。
+
+#### L. UI safety contract
+
+**Create：**
+
+```text
+passphrase + confirmation
+→ encrypted backup
+→ Files exporter
+```
+
+**Restore：**
+
+```text
+Files importer
+→ bounded read
+→ passphrase
+→ safe preflight preview
+→ explicit destructive confirmation
+→ transactional restore
+→ application refresh
+→ success
+```
+
+File selection alone **can never mutate** live financial data。
+
+Preview exposes safe metadata / counts only — **not** financial amounts, internal IDs, merchant details, or notes in v1 preview contract。
+
+#### M. Verification status（2026-08-21）
+
+Shared Swift（Windows gate）：
+
+```text
+Foundation   10 PASS
+Domain      362 PASS
+Data         99 PASS
+AI           61 PASS
+Total       532 PASS
+```
+
+Apple GitHub Actions final gate（run **32443787799**, HEAD `967c0c5`）：
+
+```text
+YoushuUITests       10 PASS
+YoushuDataTests     99 PASS
+YoushuDomainTests  362 PASS
+Total              471 PASS
+```
+
+Apple environment：Xcode **16.4**, iOS Simulator。
+
+Processed Info.plist：`app.finsight.backup` / `.finsightbackup` verified。
+
+**未验证：** physical iPhone Files smoke, TestFlight, App Store release-ready。
+
+Windows 与 Apple 测试是 **两个 platform gates**，大量 Domain/Data tests overlap — **不得** 将 532 + 471 相加为 “unique tests”。
+
+Physical-device Files smoke：**NOT RUN** — **PRE-RELEASE MANUAL ACCEPTANCE GATE**。
+
+### Consequences
+
+**正向结果：**
+
+- 用户提供 manual migration / recovery path（前提是曾创建并保留 backup）
+- restore 保持 privacy lifecycle：AI consent reset、historical insight 不迁移
+- external artifact treated as untrusted until full validation + transactional commit
+- same encrypted bytes preflight→commit；no TOCTOU via URL re-read
+
+**成本 / trade-off / 仍开放：**
+
+- 无 automatic backup / CloudKit / live sync
+- 无 human-readable Export
+- 卸载仍可能丢失 **未外置保存** 的 live local data
+- physical-device Files smoke 尚未执行
+- large JSON Store performance 仍 unverified
+- lost passphrase = unrecoverable backup
+
+### Relationship
+
+Supports / relates to: ADR-015, ADR-016, ADR-021, ADR-022, ADR-029, ADR-030
+
+ADR-033 adds the portable recovery layer **on top of** ADR-021 JSON Store; it does not replace or rename live store path rules（ADR-022 仍有效）。
 
 ---
 

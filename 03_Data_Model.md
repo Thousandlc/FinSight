@@ -2,7 +2,7 @@
 
 > 文档角色：核心数据模型与数据语义真相源  
 > 版本：v1.0  
-> 更新日期：2026-08-20  
+> 更新日期：2026-08-21  
 > 状态：Active  
 > 注意：本文强调“业务语义与边界”，具体 Swift 字段名、optional 状态与 schema version 以代码仓库为最终依据。
 
@@ -851,6 +851,69 @@ Application Support/Youshu/youshu-store.json
 
 ---
 
+## 24.1 BackupPayloadV1 — Portable Backup Transport Model（ADR-033）
+
+> **Implementation status（2026-08-21）：`IMPLEMENTED` / Apple-CI VERIFIED**
+
+`BackupPayloadV1` 是 **portable backup transport model**，用于 encrypted `.finsightbackup` artifact 内的语义 payload。
+
+它 **不是**：
+
+- Domain financial fact 的 live persistence 形态
+- raw `YoushuSnapshot`
+- JSON Store schema v4 的直接镜像
+
+Backup format version（`BackupPayloadV1.formatVersion`）**独立 versioning**；`sourceStoreSchemaVersion` 仅为 provenance metadata，**不是** restore compatibility authority。
+
+### Backed-up entities（`BackupFinancialDataV1`）
+
+```text
+BackupUserV1
+Account
+Transaction
+Debt
+DebtEvent
+RepaymentPlan
+Asset
+Goal
+Budget
+Subscription
+```
+
+关系重建所需的 UUID 可保留在加密 artifact 内。
+
+### Explicit exclusions（intentional — not data loss bug）
+
+Backup v1 **不** backup / restore / carry forward：
+
+```text
+FinancialInsight
+AIDataConsent
+AIRecognitionRecord
+MediaArtifact
+PendingDebtLink
+SuspectedDebt
+```
+
+Restore candidate 语义：
+
+```text
+JSON Store schema v4 candidate
+excluded collections → empty
+User.debtImportInProgress → false
+AIDataConsent absence → fetchOrDefault → deniedDefault
+```
+
+Historical AI insight **不** 通过 backup 迁移。Restore **不** 触发 remote AI generation。
+
+Derived read models（`FinancialSummary`, `CashFlowProjection`, `FinancialRiskAssessment`, `HomeOverview` 等）**不是** backup facts；restore 后由 engines 自 restored facts 重算。
+
+### Encryption envelope（transport layer）
+
+Backup file = authenticated encrypted envelope（PBKDF2-HMAC-SHA256 / 600,000 / AES-256-GCM；whole file ≤ 64 MiB）。Passphrase 不持久化；exact string 为 crypto input（no trim/normalization）。
+
+---
+
 ## 25. 数据生命周期
 
 ### Screenshot
@@ -897,9 +960,11 @@ ADR-020 deterministic Home fallback **不持久化**。
 
 ## 26. 删除与恢复
 
-当前 Domain 已存在用户数据 wipe 能力，但完整 UI / Backup 体系尚未形成。
+当前 Domain 已存在用户数据 wipe 能力；**Backup / Restore v1 已实现**（ADR-033，2026-08-21 VERIFIED）。
 
-未来必须区分：
+Backup v1 提供 **manual encrypted portable backup + full-replace restore** — 不是 merge，不是 Export，不是 Cloud Sync。
+
+未来仍须区分：
 
 - 删除单笔 Transaction
 - 删除 Account
@@ -907,8 +972,9 @@ ADR-020 deterministic Home fallback **不持久化**。
 - 撤销 AI Consent
 - 删除识别原图
 - 清空全部用户财务数据
-- 导出
-- 备份 / 恢复
+- human-readable Export（**仍开放**）
+- automatic / cloud backup（**仍开放**）
+- 备份 / 恢复（**v1 已实现 — manual portable encrypted**）
 
 ---
 

@@ -2,7 +2,7 @@
 
 > 文档角色：系统架构长期真相源  
 > 版本：v1.0  
-> 更新日期：2026-08-20  
+> 更新日期：2026-08-21  
 > 状态：Active  
 > 原则：本文记录“当前确认架构 + 已确定的演进方向”，不把聊天中的临时建议视作实现事实。
 
@@ -707,6 +707,8 @@ Consent 与 Freshness 是 Home current AI summary 的两个独立 gate（见 §1
 
 ## 15. 数据持久化
 
+### 15.1 Live JSON Document Store（当前 live persistence）
+
 当前已知实现：
 
 ```text
@@ -722,15 +724,13 @@ v1 → v4 migration
 
 `FinancialInsight.freshnessMetadata` 为 **optional** 字段。legacy JSON 记录缺少该字段时安全 decode 为 nil。**ADR-032 不需要 schema migration。**
 
-曾使用路径：
+Live store 路径（legacy 命名，**不得随意 rename**）：
 
 ```text
 Application Support/Youshu/youshu-store.json
 ```
 
-该路径属于 legacy 命名。
-
-**不得直接改路径导致老数据消失。**
+Backup / Restore v1 **不迁移、不重命名** live store path。ADR-022 仍有效。
 
 正式 FinSight 技术改名若涉及 store path，需要：
 
@@ -740,15 +740,76 @@ Application Support/Youshu/youshu-store.json
 4. 成功后再切换。
 5. 保留 rollback / recovery 策略。
 
-当前已知缺口：
+### 15.2 Manual Portable Backup v1（ADR-033 — IMPLEMENTED / VERIFIED 2026-08-21）
 
-- 无 iCloud
-- 无 Export
-- 无 Backup
-- 卸载 App 会丢失数据
-- 设备迁移缺少恢复能力
+Backup v1 是在 JSON Store 之上的 **portable recovery layer**，不是 Cloud Sync，也不是 human-readable Export。
 
-这是 P1 级数据安全问题。
+**Create architecture：**
+
+```text
+YoushuStore current financial facts
+        ↓
+BackupSnapshotMapper
+        ↓
+BackupPayloadV1（financial-facts transport model）
+        ↓
+BackupCodec.encode（PBKDF2-HMAC-SHA256 / 600k / AES-256-GCM）
+        ↓
+encrypted Data
+        ↓
+.finsightbackup（UTType: app.finsight.backup）
+        ↓
+Files exporter
+```
+
+**Restore architecture：**
+
+```text
+Files importer（.finsightbackup only）
+        ↓
+BackupImportFileReader（bounded ≤64 MiB, security-scoped read）
+        ↓
+immutable encrypted Data（held in flow engine）
+        ↓
+BackupRestorePreflightService（decode / validate / preview — no store mutation）
+        ↓
+destructive confirmation
+        ↓
+BackupRestoreService（re-decode / re-validate same encrypted Data）
+        ↓
+YoushuStore.replaceSnapshotForRestore（write → disk re-read → verify → rollback on failure）
+        ↓
+ApplicationRestoreRefresh（session + ViewModels + presentation subtree）
+```
+
+**关键边界：**
+
+- Backup ≠ Export ≠ Cloud Sync / multi-device live sync
+- Restore = **FULL REPLACE**（非 merge）
+- External file remains untrusted until full validation + transactional commit
+- Same encrypted bytes preflight → commit；URL 不在 preview 后重读
+- Excluded from backup/restore carry-forward：`FinancialInsight`, `AIDataConsent`, `AIRecognitionRecord`, `MediaArtifact`, `PendingDebtLink`, `SuspectedDebt`；restore 后 `debtImportInProgress = false`；AI consent → deniedDefault
+- Derived read models（Summary / CashFlow / Risk / HomeOverview 等）restore 后重算，不是 backup facts
+
+### 15.3 Remaining persistence gaps
+
+**已解决（v1 scope）：**
+
+- manual encrypted Backup creation
+- transactional full-replace Restore
+- Files-based portable artifact（`.finsightbackup`）
+
+**仍开放：**
+
+- 无 automatic backup
+- 无 CloudKit / live multi-device sync
+- 无 human-readable Export
+- 卸载仍可能丢失 **未外置保存** 的 live local data
+- 换机 / 数据恢复 **仅当用户曾创建并保留 backup** 时才有 recovery path — 不等于 device migration 已完全无风险
+- physical-device Files restore smoke：**NOT RUN**（pre-release manual gate）
+- 大数据量 JSON Store 性能仍 unverified
+
+Manual portable Backup **降低** device-loss / migration 风险，但 **不使** local persistence 自动 durable。
 
 ---
 
