@@ -39,7 +39,7 @@ struct CashFlowDetailView: View {
         .background(YSColor.Fallback.background)
         .navigationTitle("未来现金流")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear(alignSelectedHorizon)
+        .onAppear(perform: alignSelectedHorizon)
     }
 
     private var horizonPicker: some View {
