@@ -272,7 +272,7 @@ struct ApplicationRestoreRefreshUITests {
 
         await viewModels.home.load()
         if case let .content(overview) = viewModels.home.phase {
-            #expect(overview.aiSummary == nil)
+            #expect(overview.aiSummary?.modelName == "deterministic")
         } else {
             Issue.record("Expected home overview content after refresh")
         }
