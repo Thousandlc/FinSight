@@ -28,7 +28,7 @@ public struct AppDependencies {
         mockAIProvider: MockAIProvider = MockAIProvider(),
         secureTokens: any SecureTokenStoring = InMemorySecureTokenStore(),
         gatewayTransport: (any GatewayHTTPTransport)? = nil,
-        sourceAppVersionProvider: SourceAppVersionProvider = { nil }
+        sourceAppVersionProvider: @escaping SourceAppVersionProvider = { nil }
     ) {
         self.repositories = repositories
         self.secureTokens = secureTokens
