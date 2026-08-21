@@ -60,6 +60,12 @@ targets:
     dependencies:
       - package: Youshu
         product: YoushuDomain
+      - package: Youshu
+        product: YoushuData
+      - package: Youshu
+        product: YoushuAI
+      - package: Youshu
+        product: YoushuLogging
   YoushuDataTests:
     type: bundle.unit-test
     platform: iOS
