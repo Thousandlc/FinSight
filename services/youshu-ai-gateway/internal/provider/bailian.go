@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -77,7 +78,10 @@ func (p *BailianProvider) DiagnoseMonthlySummary(
 	req contract.RequestEnvelope,
 ) (draft contract.AssistantAnswerDraftDTO, diag DecodeDiagnostics, err error) {
 	started := time.Now()
-	defer func() { diag.Latency = time.Since(started) }()
+	defer func() {
+		diag.Latency = time.Since(started)
+		recordProviderDiagnostics(ctx, p.config, diag)
+	}()
 	diag.ConfiguredModel = p.config.Model
 	diag.SelectedProvider = "bailian"
 	diag.GatewaySchemaValidation = StageSkip
@@ -88,7 +92,7 @@ func (p *BailianProvider) DiagnoseMonthlySummary(
 		diag.ErrorCategory = ErrorCategoryRequestConstruction
 		diag.UpstreamHTTP = StageSkip
 		fillSkippedDecode(&diag)
-		err = upstreamErr(contract.ErrInternalError, buildErr)
+		err = annotateUpstream(upstreamErr(contract.ErrInternalError, buildErr), observability.StageUnknown, observability.CodeInternalError, "", "")
 		return
 	}
 
@@ -97,7 +101,7 @@ func (p *BailianProvider) DiagnoseMonthlySummary(
 		diag.ErrorCategory = ErrorCategoryRequestConstruction
 		diag.UpstreamHTTP = StageSkip
 		fillSkippedDecode(&diag)
-		err = upstreamErr(contract.ErrInternalError, urlErr)
+		err = annotateUpstream(upstreamErr(contract.ErrInternalError, urlErr), observability.StageUnknown, observability.CodeInternalError, "", "")
 		return
 	}
 	diag.RequestURLScheme, diag.RequestURLHost, diag.RequestURLPath = ParseRequestURLParts(endpoint)
@@ -107,7 +111,7 @@ func (p *BailianProvider) DiagnoseMonthlySummary(
 		diag.ErrorCategory = ErrorCategoryRequestConstruction
 		diag.UpstreamHTTP = StageSkip
 		fillSkippedDecode(&diag)
-		err = upstreamErr(contract.ErrInternalError, formatErr)
+		err = annotateUpstream(upstreamErr(contract.ErrInternalError, formatErr), observability.StageUnknown, observability.CodeInternalError, "", "")
 		return
 	}
 
@@ -121,7 +125,7 @@ func (p *BailianProvider) DiagnoseMonthlySummary(
 		diag.ErrorCategory = ErrorCategoryRequestConstruction
 		diag.UpstreamHTTP = StageSkip
 		fillSkippedDecode(&diag)
-		err = upstreamErr(contract.ErrInternalError, marshalErr)
+		err = annotateUpstream(upstreamErr(contract.ErrInternalError, marshalErr), observability.StageUnknown, observability.CodeInternalError, "", "")
 		return
 	}
 
@@ -132,7 +136,7 @@ func (p *BailianProvider) DiagnoseMonthlySummary(
 		diag.ErrorCategory = ErrorCategoryTimeout
 		diag.UpstreamHTTP = StageFail
 		fillSkippedDecode(&diag)
-		err = upstreamErr(contract.ErrProviderTimeout, acquireErr)
+		err = annotateUpstream(upstreamErr(contract.ErrProviderTimeout, acquireErr), observability.StageProviderTransport, observability.CodeProviderTimeout, "", "")
 		return
 	}
 	defer p.concurrency.Release()
@@ -148,14 +152,26 @@ func (p *BailianProvider) DiagnoseMonthlySummary(
 	if transportErr != nil {
 		diag.UpstreamHTTP = StageFail
 		fillSkippedDecode(&diag)
+		if resp != nil {
+			diag.TransportPerformStarted = true
+			diag.HTTPResponseReceived = true
+			diag.HTTPStatus = resp.StatusCode
+			diag.HTTP2xxSuccess = false
+			diag.HTTPSuccess = false
+			diag.ErrorCategory = ClassifyHTTPStatus(resp.StatusCode)
+			diag.ProviderErrorCode, diag.ProviderErrorMessage = ExtractProviderError(respBody)
+			obsCode, stage := classifyProviderHTTP(resp.StatusCode)
+			err = annotateUpstream(transportErr, stage, obsCode, "", strconv.Itoa(resp.StatusCode))
+			return
+		}
 		diag.ErrorCategory = ClassifyDoError(transportErr)
 		if errors.Is(transportErr, context.DeadlineExceeded) || callCtx.Err() == context.DeadlineExceeded {
 			diag.TimeoutStage = TimeoutStageUpstreamHTTP
 			diag.ErrorCategory = ErrorCategoryTimeout
-			err = upstreamErr(contract.ErrProviderTimeout, transportErr)
+			err = annotateUpstream(transportErr, observability.StageProviderTransport, observability.CodeProviderTimeout, "", "")
 			return
 		}
-		err = transportErr
+		err = annotateUpstream(transportErr, observability.StageProviderTransport, observability.CodeTransportFailure, "", "")
 		return
 	}
 
@@ -177,7 +193,8 @@ func (p *BailianProvider) DiagnoseMonthlySummary(
 			diag.ErrorCategory = ClassifyHTTPStatus(resp.StatusCode)
 		}
 		fillSkippedDecode(&diag)
-		err = statusErr
+		obsCode, stage := classifyProviderHTTP(resp.StatusCode)
+		err = annotateUpstream(statusErr, stage, obsCode, "", strconv.Itoa(resp.StatusCode))
 		return
 	}
 
@@ -188,18 +205,18 @@ func (p *BailianProvider) DiagnoseMonthlySummary(
 		diag.ContentJSONSyntax = StageSkip
 		diag.GenericJSONObjectDecode = StageSkip
 		diag.DraftDTODecode = StageSkip
-		err = upstreamErr(contract.ErrInvalidProviderResponse, unmarshalErr)
+		err = annotateUpstream(
+			upstreamErr(contract.ErrInvalidProviderResponse, unmarshalErr),
+			observability.StageProviderStructuredOutput,
+			observability.CodeStructuredOutputDecodeFailure,
+			observability.SchemaModelDraft,
+			strconv.Itoa(resp.StatusCode),
+		)
 		return
 	}
 	diag.OpenAIEnvelopeDecode = StagePass
 	diag.UpstreamModel = strings.TrimSpace(completion.Model)
-
-	if completion.Usage != nil {
-		diag.PromptTokens = completion.Usage.PromptTokens
-		diag.CompletionTokens = completion.Usage.CompletionTokens
-		diag.TotalTokens = completion.Usage.TotalTokens
-	}
-	logUsage(completion.Usage)
+	applyUsage(&diag, completion.Usage)
 
 	content := strings.TrimSpace(completion.firstContent())
 	maybeDumpRawContent(req.RequestID, content)
@@ -207,8 +224,22 @@ func (p *BailianProvider) DiagnoseMonthlySummary(
 	analyzed, contentDiag := AnalyzeContent(content, req.FinancialRiskAssessment, req.MonthlySummaryFacts)
 	mergeContentDiagnostics(&diag, contentDiag)
 
+	if diag.FactMaterialization == StageFail {
+		err = materializationErrorFromDiag(diag)
+		return
+	}
 	if diag.DraftDTODecode != StagePass {
-		err = upstreamErr(contract.ErrInvalidProviderResponse, fmt.Errorf("content decode failed"))
+		err = structuredOutputError(diag)
+		return
+	}
+	if diag.ProvenanceAssembly == StageFail {
+		err = annotateUpstream(
+			upstreamErr(contract.ErrInvalidProviderResponse, nil),
+			observability.StageProviderStructuredOutput,
+			observability.CodeInvalidProviderResponse,
+			observability.SchemaGatewayDraft,
+			strconv.Itoa(resp.StatusCode),
+		)
 		return
 	}
 	draft = analyzed
@@ -236,6 +267,9 @@ func fillSkippedDecode(diag *DecodeDiagnostics) {
 	}
 	if diag.ProvenanceAssembly == "" {
 		diag.ProvenanceAssembly = StageSkip
+	}
+	if diag.FactMaterialization == "" {
+		diag.FactMaterialization = StageSkip
 	}
 }
 
@@ -305,17 +339,23 @@ func chatCompletionsURL(baseURL string) (string, error) {
 	return u.String(), nil
 }
 
-func logUsage(usage *tokenUsage) {
-	if usage == nil {
+func applyUsage(diag *DecodeDiagnostics, usage *tokenUsage) {
+	if diag == nil || usage == nil {
 		return
 	}
-	observability.Log(observability.Entry{
-		Event:            "provider_token_usage",
-		PromptTokens:     usage.PromptTokens,
-		CompletionTokens: usage.CompletionTokens,
-		TotalTokens:      usage.TotalTokens,
-		Provider:         "bailian",
-	})
+	diag.UsagePresent = true
+	diag.PromptTokensPtr = usage.PromptTokens
+	diag.CompletionTokensPtr = usage.CompletionTokens
+	diag.TotalTokensPtr = usage.TotalTokens
+	if usage.PromptTokens != nil {
+		diag.PromptTokens = *usage.PromptTokens
+	}
+	if usage.CompletionTokens != nil {
+		diag.CompletionTokens = *usage.CompletionTokens
+	}
+	if usage.TotalTokens != nil {
+		diag.TotalTokens = *usage.TotalTokens
+	}
 }
 
 type chatCompletionRequest struct {
@@ -379,9 +419,9 @@ type chatCompletionResponse struct {
 }
 
 type tokenUsage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
+	PromptTokens     *int `json:"prompt_tokens"`
+	CompletionTokens *int `json:"completion_tokens"`
+	TotalTokens      *int `json:"total_tokens"`
 }
 
 func (r chatCompletionResponse) firstContent() string {

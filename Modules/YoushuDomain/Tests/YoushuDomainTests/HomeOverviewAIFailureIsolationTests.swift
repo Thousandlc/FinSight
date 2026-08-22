@@ -237,6 +237,63 @@ struct HomeOverviewAIFailureIsolationTests {
         )
         #expect(overview.availableFunds == expectedAvailable)
     }
+
+    @Test("T6 optional AI failure emits degraded while Home stays available")
+    func remoteAIFailureEmitsDegraded() async throws {
+        let store = YoushuStore()
+        let container = RepositoryContainer(store: store)
+        let userId = UUID()
+        let account = try await seedLedger(container: container, userId: userId)
+        let transport = FailingTransport()
+        let consentService = AIDataConsentService(consents: container.aiDataConsents)
+        _ = try await consentService.acceptAssistantPrivacy(userId: userId)
+        let home = makeRemoteHome(container: container, transport: transport, consentService: consentService)
+        let collector = ObservabilityEventCollector()
+
+        let overview = try await ObservabilityEmission.$collector.withValue(collector) {
+            try await home.loadOverview(userId: userId)
+        }
+
+        #expect(transport.performCount == 1)
+        #expect(overview.aiSummary?.modelName == "deterministic")
+        #expect(overview.hasAccounts)
+        #expect(overview.hasTransactions)
+        let txs = try await container.transactions.fetchAll(userId: userId)
+        let expectedAvailable = AccountBalanceEngine.availableFunds(
+            accounts: [account],
+            transactions: txs
+        )
+        #expect(overview.availableFunds == expectedAvailable)
+        let event = try #require(collector.last)
+        #expect(event.outcome == .degraded)
+        #expect(event.operation == .monthlySummary)
+        #expect(event.errorCode == .unauthorized)
+        #expect(event.retryCount == 0)
+        #expect(ObservabilityRequestID.isWellFormed(event.requestId))
+        let text = try collector.encodedProductionOutput()
+        #expect(!text.contains("localizedDescription"))
+        #expect(!text.contains("RAW_RESPONSE_SECRET_CANARY"))
+    }
+
+    @Test("T7 consent denied Home skip emits no remote/consent observability event")
+    func consentDeniedDoesNotEmitRemoteEvent() async throws {
+        let store = YoushuStore()
+        let container = RepositoryContainer(store: store)
+        let userId = UUID()
+        _ = try await seedLedger(container: container, userId: userId)
+        let transport = FailingTransport()
+        let consentService = AIDataConsentService(consents: container.aiDataConsents)
+        let home = makeRemoteHome(container: container, transport: transport, consentService: consentService)
+        let collector = ObservabilityEventCollector()
+
+        let overview = try await ObservabilityEmission.$collector.withValue(collector) {
+            try await home.loadOverview(userId: userId)
+        }
+
+        #expect(transport.performCount == 0)
+        #expect(overview.aiSummary?.modelName == "deterministic")
+        #expect(collector.events.isEmpty)
+    }
 }
 
 private actor InMemoryTransactionRepository: TransactionRepository {

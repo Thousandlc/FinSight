@@ -1,6 +1,8 @@
 package factpack_test
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/youshu/youshu-ai-gateway/internal/contract"
@@ -57,8 +59,32 @@ func TestMaterializeKeyFactText(t *testing.T) {
 
 func TestMaterializeKeyFactUnregisteredFails(t *testing.T) {
 	facts := sampleFacts()
-	if _, err := factpack.MaterializeKeyFact("totalDebt", "x", "other", facts); err == nil {
+	_, err := factpack.MaterializeKeyFact("totalDebt", "x", "other", facts)
+	if err == nil {
 		t.Fatal("unregistered source must fail")
+	}
+	var mat *factpack.MaterializationError
+	if !errors.As(err, &mat) || mat.Code != factpack.CodeUnknownFactSource {
+		t.Fatalf("err=%v", err)
+	}
+	if err.Error() != factpack.CodeUnknownFactSource {
+		t.Fatalf("Error() leaked payload: %q", err.Error())
+	}
+}
+
+func TestMaterializeKeyFactInvalidAmountIsStable(t *testing.T) {
+	facts := sampleFacts()
+	facts.AvailableCash.Amount = "FINANCIAL_SECRET_CANARY"
+	_, err := factpack.MaterializeKeyFact("availableCash", "可用资金", "balance", facts)
+	if err == nil {
+		t.Fatal("invalid amount must fail")
+	}
+	var mat *factpack.MaterializationError
+	if !errors.As(err, &mat) || mat.Code != factpack.CodeMaterializationFailure {
+		t.Fatalf("err=%v", err)
+	}
+	if strings.Contains(err.Error(), "FINANCIAL_SECRET_CANARY") {
+		t.Fatalf("amount leaked: %q", err.Error())
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/youshu/youshu-ai-gateway/internal/contract"
+	"github.com/youshu/youshu-ai-gateway/internal/observability"
 )
 
 // Clock provides time for deterministic rate limit tests.
@@ -104,6 +105,9 @@ func (rl *FixedWindowRateLimiter) Middleware(next http.Handler) http.Handler {
 		rl.mu.Unlock()
 
 		if !allowed {
+			if rec := observability.FromContext(r.Context()); rec != nil {
+				rec.Fail(observability.Classify(observability.CodeGatewayRateLimited, observability.StageGatewayRequestValidation))
+			}
 			writeGatewayRateLimit(w, requestIDFromRequest(r), retryAfter)
 			return
 		}
@@ -128,6 +132,9 @@ func writeGatewayRateLimit(w http.ResponseWriter, requestID string, retryAfter i
 }
 
 func requestIDFromRequest(r *http.Request) string {
+	if id := observability.RequestIDFromContext(r.Context()); id != "" {
+		return id
+	}
 	return strings.TrimSpace(r.Header.Get("X-Youshu-Request-Id"))
 }
 

@@ -25,9 +25,9 @@ func TestLogEntryNoFinancialFields(t *testing.T) {
 	entry := observability.Entry{
 		Event:            "provider_token_usage",
 		RequestID:        "req-1",
-		PromptTokens:     10,
-		CompletionTokens: 5,
-		TotalTokens:      15,
+		PromptTokens:     observability.Int(10),
+		CompletionTokens: observability.Int(5),
+		TotalTokens:      observability.Int(15),
 	}
 	if entry.RequestID == "" {
 		t.Fatal("expected request id")

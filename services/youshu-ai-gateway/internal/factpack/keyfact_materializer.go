@@ -8,19 +8,41 @@ import (
 	"github.com/youshu/youshu-ai-gateway/internal/contract"
 )
 
+const (
+	CodeUnknownFactSource      = "unknownFactSource"
+	CodeMaterializationFailure = "materializationFailure"
+)
+
+// MaterializationError is a stable, payload-free Gateway materializer failure.
+// Error() is an allowlisted code only — never amounts, sources, or fact values.
+type MaterializationError struct {
+	Code string
+}
+
+func (e *MaterializationError) Error() string {
+	if e == nil || strings.TrimSpace(e.Code) == "" {
+		return CodeMaterializationFailure
+	}
+	return e.Code
+}
+
+func materializationError(code string) error {
+	return &MaterializationError{Code: code}
+}
+
 // MaterializeKeyFact builds a gateway keyFact with canonical typed value from FactPack.
 func MaterializeKeyFact(
 	source, label, kind string,
 	facts *contract.MonthlySummaryFactsDTO,
 ) (contract.KeyFact, error) {
 	if facts == nil {
-		return contract.KeyFact{}, fmt.Errorf("keyfact materialization for %s: missing facts", source)
+		return contract.KeyFact{}, materializationError(CodeMaterializationFailure)
 	}
 	amountKeys, factKeys, _ := AllowedKeys(facts)
 	if money, ok := amountKeys[source]; ok {
 		value, err := materializeMoneyValue(money)
 		if err != nil {
-			return contract.KeyFact{}, fmt.Errorf("keyfact materialization for %s: %w", source, err)
+			return contract.KeyFact{}, materializationError(CodeMaterializationFailure)
 		}
 		return contract.KeyFact{
 			Label:  label,
@@ -32,7 +54,7 @@ func MaterializeKeyFact(
 	if text, ok := factKeys[source]; ok && strings.TrimSpace(text) != "" {
 		value, err := materializeTextOrPercentValue(source, text)
 		if err != nil {
-			return contract.KeyFact{}, fmt.Errorf("keyfact materialization for %s: %w", source, err)
+			return contract.KeyFact{}, materializationError(CodeMaterializationFailure)
 		}
 		return contract.KeyFact{
 			Label:  label,
@@ -41,7 +63,7 @@ func MaterializeKeyFact(
 			Value:  value,
 		}, nil
 	}
-	return contract.KeyFact{}, fmt.Errorf("keyfact materialization for %s: source not registered", source)
+	return contract.KeyFact{}, materializationError(CodeUnknownFactSource)
 }
 
 // MaterializeKeyFacts materializes all model-selected keyFacts from FactPack canonical values.
@@ -63,7 +85,7 @@ func MaterializeKeyFacts(
 func materializeMoneyValue(money contract.MoneyDTO) (contract.KeyFactValue, error) {
 	amount, err := parseCanonicalAmount(money.Amount)
 	if err != nil {
-		return contract.KeyFactValue{}, fmt.Errorf("invalid money amount: %w", err)
+		return contract.KeyFactValue{}, fmt.Errorf("invalid money amount")
 	}
 	currency := strings.TrimSpace(money.CurrencyCode)
 	if currency == "" {
@@ -81,7 +103,7 @@ func materializeTextOrPercentValue(source, canonical string) (contract.KeyFactVa
 	if strings.HasSuffix(trimmed, "%") || source == "debtPaymentToIncomePercent" {
 		pct, err := parseCanonicalAmount(strings.TrimSuffix(trimmed, "%"))
 		if err != nil {
-			return contract.KeyFactValue{}, fmt.Errorf("invalid percent value: %w", err)
+			return contract.KeyFactValue{}, fmt.Errorf("invalid percent value")
 		}
 		return contract.KeyFactValue{Type: "percent", PercentValue: &pct}, nil
 	}

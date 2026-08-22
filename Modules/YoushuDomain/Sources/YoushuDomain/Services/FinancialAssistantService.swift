@@ -104,6 +104,15 @@ public struct FinancialAssistantService: Sendable {
         userId: UUID,
         asOf: Date = Date()
     ) async throws -> MonthlySummaryRiskAssemblyResult {
+        try await ObservabilityEmission.run(operation: .monthlySummary) {
+            try await self.produceMonthlySummary(userId: userId, asOf: asOf)
+        }
+    }
+
+    private func produceMonthlySummary(
+        userId: UUID,
+        asOf: Date
+    ) async throws -> MonthlySummaryRiskAssemblyResult {
         try await requireFinancialContextConsent(userId: userId)
         let source = try await loadSource(userId: userId, asOf: asOf)
         let context = FinancialContextBuilder.build(source)
@@ -147,7 +156,7 @@ public struct FinancialAssistantService: Sendable {
             generatedAt: asOf,
             freshnessMetadata: freshnessMetadata
         )
-        try await insights.upsert(insight)
+        try await persistInsight(insight)
         return MonthlySummaryRiskAssemblyResult(insight: insight, riskAssessment: assessment)
     }
 
@@ -174,6 +183,12 @@ public struct FinancialAssistantService: Sendable {
 
     /// 生成主动洞察并写入 Insight 仓库（不修改 Account/Transaction/Debt 金额）。
     public func refreshProactiveInsights(userId: UUID, asOf: Date = Date()) async throws -> [FinancialInsight] {
+        try await ObservabilityEmission.run(operation: .insight) {
+            try await self.refreshProactiveInsightsUntraced(userId: userId, asOf: asOf)
+        }
+    }
+
+    private func refreshProactiveInsightsUntraced(userId: UUID, asOf: Date) async throws -> [FinancialInsight] {
         try await requireFinancialContextConsent(userId: userId)
         let source = try await loadSource(userId: userId, asOf: asOf)
         let context = FinancialContextBuilder.build(source)
@@ -212,7 +227,7 @@ public struct FinancialAssistantService: Sendable {
                 modelName: assistant.name,
                 generatedAt: asOf
             )
-            try await insights.upsert(insight)
+            try await persistInsight(insight)
             created.append(insight)
         }
         return created
@@ -257,6 +272,19 @@ public struct FinancialAssistantService: Sendable {
             establishment: user?.debtInventoryEstablishment ?? .unestablished,
             importInProgress: user?.debtImportInProgress ?? false
         )
+    }
+
+    private func persistInsight(_ insight: FinancialInsight) async throws {
+        do {
+            try await insights.upsert(insight)
+        } catch {
+            ObservabilityEmission.recorder?.noteFailure(
+                error.observabilityClassification.stage == .insightPersistence
+                    ? error.observabilityClassification
+                    : ObservabilityErrorMapping.classify(code: .persistenceFailure, stage: .insightPersistence)
+            )
+            throw error
+        }
     }
 
     private func requireFinancialContextConsent(userId: UUID) async throws {

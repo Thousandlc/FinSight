@@ -966,7 +966,8 @@ AI 不应该决定：资金缺口是否真实、债务是否逾期、金额是�
 | 层 | 角色 | 失败行为 |
 |----|------|----------|
 | **Core Home pipeline** | Repositories → deterministic engines → `HomeOverview` metrics | **Required** — failure → Home load failure |
-| **AI monthly summary enrichment** | Consent-gated optional remote/mock summary | **Optional** — failure → deterministic fallback; Home 仍可用 |
+| **AI monthly summary enrichment** | Consent-gated optional remote/mock summary | **Optional** — generation/Validator failure → deterministic fallback; Home 仍可用 |
+| **Monthly-summary cache write** | Home stale-cache `FinancialInsight.summary` upsert after Validator | **Optional** — persist failure → Home 仍可用；已校验 AI 摘要可 ephemeral 展示；`outcome=degraded` |
 
 当前实现链路（ADR-020 + ADR-032）：
 
@@ -976,7 +977,10 @@ Deterministic Home
   → Freshness Gate
   → optional AI monthly-summary enrichment
   → success: validated AI summary
-  → failure: local deterministic summary (modelName = "deterministic")
+      → stale cache replace upsert (best-effort)
+          → upsert success: durable fresh cache
+          → upsert failure: ephemeral validated summary, durable state unchanged
+  → generation/Validator failure: local deterministic summary (modelName = "deterministic")
   → HomeOverview → UI (.content)
 ```
 
@@ -990,7 +994,7 @@ Deterministic fallback 特性：
 Home availability policy 在 **`HomeOverviewService`**，不在 Provider。  
 `FinancialAssisting` **不再包含** `allowsDeterministicFallbackOnAIFailure`。
 
-Regression：`HomeOverviewAIFailureIsolationTests`。
+Regression：`HomeOverviewAIFailureIsolationTests`、`HomeOverviewCachePersistenceIsolationTests`。
 
 ### 其他能力降级目标
 
@@ -1011,6 +1015,28 @@ Regression：`HomeOverviewAIFailureIsolationTests`。
 
 ## 18. Observability
 
+> **Implementation status（2026-08-22）：Error taxonomy / privacy-safe event contract drafted; Gateway instrumentation implemented; iOS instrumentation implemented; cross-platform privacy/integration regression in progress — Production Observability closure 仍进行中。**
+
+Canonical production contract（Swift `YoushuFoundation` + Gateway `observability` package）：
+
+```text
+failureStage
+errorCode
+failureClass
+retryability
+outcome
+```
+
+Trust-boundary stages remain distinct:
+
+```text
+providerStructuredOutput
+≠ factMaterialization
+≠ assistantValidation
+```
+
+Production event fields are allowlisted（requestId / operation / outcome / duration / retryCount / provider / model / token usage / optional cost provenance）。
+
 Gateway / App 后续至少需要非敏感生产可观测性：
 
 - requestId
@@ -1029,8 +1055,22 @@ Gateway / App 后续至少需要非敏感生产可观测性：
 - Token
 - 原始截图
 - 可直接还原用户隐私的 prompt dump
+- 任意 `localizedDescription` / raw Provider body 作为 production error identifier
 
 Debug-only raw dump 必须显式开关，且不可进入 production default。
+
+Production Observability **尚未关闭**：
+
+```text
+contract established
+Gateway instrumentation implemented
+iOS instrumentation implemented
+cross-platform privacy/integration regression in progress
+```
+
+Verified: Swift/Go taxonomy fixture parity; iOS does not invent Gateway-internal `failureStage` from public error envelopes; local Gateway httptest + iOS client component `requestId` correlation; production sinks are **local structured logs only** (not remote aggregation). Token usage remains Gateway-owned; cost remains absent. Home optional monthly-summary **cache persist failure** is isolated: `insightPersistence` / `persistenceFailure` / `outcome=degraded`, Home remains available with the already-validated AI summary shown ephemerally; durable cache is unchanged.
+
+ADR-035 / Context Sync / Apple-gate closure 仍待下一步。
 
 ---
 

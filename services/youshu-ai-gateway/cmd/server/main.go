@@ -32,15 +32,11 @@ func main() {
 		Upstream:      upstream,
 	}
 
-	var aiHandler http.Handler = financialHandler
-	aiHandler = middleware.StructuredLogging(aiHandler)
-	aiHandler = middleware.Auth(cfg.GatewayClientToken, aiHandler)
-
 	rateLimiter := middleware.NewFixedWindowRateLimiter(middleware.RateLimitOptions{
 		Limit:  cfg.RateLimitRequests,
 		Window: time.Duration(cfg.RateLimitWindowSec) * time.Second,
 	})
-	aiHandler = rateLimiter.Middleware(aiHandler)
+	aiHandler := middleware.WrapFinancialAssistant(cfg.BuildVersion, cfg.GatewayClientToken, rateLimiter, financialHandler)
 
 	rootMux := http.NewServeMux()
 	rootMux.Handle("/health", &handler.HealthHandler{BuildVersion: cfg.BuildVersion})

@@ -38,33 +38,34 @@ var requiredModelDraftKeys = []string{
 // DecodeDiagnostics records stage-by-stage Bailian response processing.
 // It never includes prompt, API key, or model content values.
 type DecodeDiagnostics struct {
-	UpstreamHTTP            string
-	OpenAIEnvelopeDecode    string
-	ContentPresent          string
-	ContentJSONSyntax       string
-	GenericJSONObjectDecode string
-	DraftDTODecode          string
-	ExplanationAlignment    string
-	ProvenanceAssembly      string
+	UpstreamHTTP                  string
+	OpenAIEnvelopeDecode          string
+	ContentPresent                string
+	ContentJSONSyntax             string
+	GenericJSONObjectDecode       string
+	DraftDTODecode                string
+	ExplanationAlignment          string
+	ProvenanceAssembly            string
+	FactMaterialization           string
 	ProvenanceAssemblyFailureCode string
-	AlignmentFailureCode    string
-	GatewaySchemaValidation string
-	FactValidation          string
+	AlignmentFailureCode          string
+	GatewaySchemaValidation       string
+	FactValidation                string
 
-	HTTPStatus  int
-	HTTPSuccess bool
-	Latency     time.Duration
+	HTTPStatus   int
+	HTTPSuccess  bool
+	Latency      time.Duration
 	TimeoutStage string
 
 	ContentJSONValid bool
 	ContentLength    int
 	TopLevelKeys     []string
 
-	DTODecodeErrorKind string
-	DTODecodeErrorPath string
-	ExpectedType       string
-	ActualJSONType     string
-	MissingKey         string
+	DTODecodeErrorKind     string
+	DTODecodeErrorPath     string
+	ExpectedType           string
+	ActualJSONType         string
+	MissingKey             string
 	UnexpectedTopLevelKeys []string
 
 	// Populated when model draft decodes; retained even when explanation alignment fails.
@@ -75,50 +76,55 @@ type DecodeDiagnostics struct {
 	RiskExplanationDiagnostics      []RiskExplanationDiagnostic
 	UnknownExplanationDiagnostics   []UnknownExplanationDiagnostic
 
-	PromptTokens     int
-	CompletionTokens int
-	TotalTokens      int
+	PromptTokens        int
+	CompletionTokens    int
+	TotalTokens         int
+	UsagePresent        bool
+	PromptTokensPtr     *int
+	CompletionTokensPtr *int
+	TotalTokensPtr      *int
+	MaterializationCode string
 
-	TitleValid       bool
-	BodyValid        bool
-	AnswerValid      bool
-	ArraysValid      bool
-	EnumValid        bool
-	KeyFactKindValid         bool
-	KeyFactValueValid        bool
-	WarningSeverityValid     bool
-	ActionDestinationValid   bool
-	InvalidEnumField         string
-	InvalidEnumValue         string
-	KeyFactKinds             []string
-	KeyFactValueTypes        []string
-	WarningSeverities        []string
-	ActionDestinations       []string
-	ConfiguredModel          string
-	UpstreamModel            string
-	SchemaFailedRule string
-	InventedFacts    int
-	InvalidReferences int
-	InvalidActions   int
+	TitleValid             bool
+	BodyValid              bool
+	AnswerValid            bool
+	ArraysValid            bool
+	EnumValid              bool
+	KeyFactKindValid       bool
+	KeyFactValueValid      bool
+	WarningSeverityValid   bool
+	ActionDestinationValid bool
+	InvalidEnumField       string
+	InvalidEnumValue       string
+	KeyFactKinds           []string
+	KeyFactValueTypes      []string
+	WarningSeverities      []string
+	ActionDestinations     []string
+	ConfiguredModel        string
+	UpstreamModel          string
+	SchemaFailedRule       string
+	InventedFacts          int
+	InvalidReferences      int
+	InvalidActions         int
 
-	AmountFactsValid       bool
-	CitedFactKeysValid     bool
-	KeyFactSourcesValid    bool
-	KeyFactValuesValid     bool
-	ReferencesValid        bool
-	ActionsValid           bool
-	WarningSourcesValid    bool
-	PercentFactsValid      bool
-	DateFactsValid         bool
-	InvalidCitedKeyCount   int
-	InvalidKeyFactCount    int
-	InvalidWarningSources  int
-	FactFailureRules       []string
-	InvalidFactRule        string
-	InvalidFactKey         string
-	InvalidFactSource      string
-	ExpectedFactKey        string
-	ActualFactKey          string
+	AmountFactsValid      bool
+	CitedFactKeysValid    bool
+	KeyFactSourcesValid   bool
+	KeyFactValuesValid    bool
+	ReferencesValid       bool
+	ActionsValid          bool
+	WarningSourcesValid   bool
+	PercentFactsValid     bool
+	DateFactsValid        bool
+	InvalidCitedKeyCount  int
+	InvalidKeyFactCount   int
+	InvalidWarningSources int
+	FactFailureRules      []string
+	InvalidFactRule       string
+	InvalidFactKey        string
+	InvalidFactSource     string
+	ExpectedFactKey       string
+	ActualFactKey         string
 
 	FailingKeyFactIndex    int
 	FailingKeyFactKind     string
@@ -186,6 +192,9 @@ func AnalyzeContent(
 		DraftDTODecode:          StageSkip,
 		GatewaySchemaValidation: StageSkip,
 		FactValidation:          StageSkip,
+		ExplanationAlignment:    StageSkip,
+		ProvenanceAssembly:      StageSkip,
+		FactMaterialization:     StageSkip,
 	}
 	trimmed := strings.TrimSpace(content)
 	diag.ContentLength = len(trimmed)
@@ -269,11 +278,19 @@ func AnalyzeContent(
 
 		draft, err := MapModelDraftToGateway(model, assessment, facts)
 		if err != nil {
+			var mat *factpack.MaterializationError
+			if errors.As(err, &mat) {
+				diag.FactMaterialization = StageFail
+				diag.MaterializationCode = mat.Code
+				diag.DTODecodeErrorKind = "factMaterialization"
+				return contract.AssistantAnswerDraftDTO{}, diag
+			}
 			diag.ProvenanceAssembly = StageFail
 			diag.DTODecodeErrorKind = "provenanceAssembly"
 			diag.ProvenanceAssemblyFailureCode = ParseProvenanceAssemblyFailureCode(err)
 			return contract.AssistantAnswerDraftDTO{}, diag
 		}
+		diag.FactMaterialization = StagePass
 		if err := ValidateAssembledRiskExplanationProvenance(draft.RiskExplanations, assessment, keySets); err != nil {
 			diag.ProvenanceAssembly = StageFail
 			diag.DTODecodeErrorKind = "provenanceAssembly"
@@ -286,6 +303,7 @@ func AnalyzeContent(
 	}
 	diag.ExplanationAlignment = StageSkip
 	diag.ProvenanceAssembly = StageSkip
+	diag.FactMaterialization = StageSkip
 	return contract.AssistantAnswerDraftDTO{}, diag
 }
 
@@ -298,6 +316,8 @@ func mergeContentDiagnostics(dst *DecodeDiagnostics, src DecodeDiagnostics) {
 	dst.DraftDTODecode = src.DraftDTODecode
 	dst.ExplanationAlignment = src.ExplanationAlignment
 	dst.ProvenanceAssembly = src.ProvenanceAssembly
+	dst.FactMaterialization = src.FactMaterialization
+	dst.MaterializationCode = src.MaterializationCode
 	dst.ProvenanceAssemblyFailureCode = src.ProvenanceAssemblyFailureCode
 	dst.AlignmentFailureCode = src.AlignmentFailureCode
 	dst.ContentJSONValid = src.ContentJSONValid

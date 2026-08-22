@@ -6,6 +6,7 @@ import (
 
 	"github.com/youshu/youshu-ai-gateway/internal/contract"
 	"github.com/youshu/youshu-ai-gateway/internal/factpack"
+	"github.com/youshu/youshu-ai-gateway/internal/observability"
 )
 
 // MockUpstreamAIProvider returns structured JSON derived from request facts and assessment.
@@ -16,9 +17,13 @@ func NewMockUpstreamAIProvider() *MockUpstreamAIProvider {
 }
 
 func (p *MockUpstreamAIProvider) CompleteMonthlySummary(
-	_ context.Context,
+	ctx context.Context,
 	req contract.RequestEnvelope,
 ) (contract.AssistantAnswerDraftDTO, error) {
+	if rec := observability.FromContext(ctx); rec != nil {
+		rec.SetProvider(observability.ProviderMock, "")
+		rec.SetRetryCount(0)
+	}
 	facts := req.MonthlySummaryFacts
 	if facts == nil {
 		return contract.AssistantAnswerDraftDTO{}, fmt.Errorf("missing monthlySummaryFacts")

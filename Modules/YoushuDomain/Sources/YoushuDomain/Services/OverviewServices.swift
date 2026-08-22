@@ -171,21 +171,61 @@ public struct HomeOverviewService: HomeOverviewProviding {
         let staleStoredCandidate = stored
 
         if let assistant = financialAssistant {
+            let recorder = ObservabilityOperationRecorder(operation: .monthlySummary)
+            let generated: FinancialInsight
             do {
-                let generated = try await generateRemoteAISummary(
+                generated = try await ObservabilityEmission.$recorder.withValue(recorder) {
+                    try await self.generateRemoteAISummary(
+                        userId: userId,
+                        context: context,
+                        assistant: assistant,
+                        freshnessContext: freshnessContext
+                    )
+                }
+            } catch is CancellationError {
+                recorder.noteFailure(
+                    ObservabilityErrorMapping.classify(code: .cancelled, stage: .clientTransport)
+                )
+                ObservabilityEmission.emitTerminal(recorder, outcome: .cancelled)
+                return makeDeterministicSummary(
                     userId: userId,
                     context: context,
-                    assistant: assistant,
-                    freshnessContext: freshnessContext
+                    primaryRisk: primaryRisk
                 )
-                if staleStoredCandidate != nil {
-                    try await insights.upsert(generated)
-                }
-                return generated
             } catch {
                 // Optional AI enrichment failure: Home availability policy lives here (ADR-020).
                 // Deterministic Home metrics are already computed; fall back locally.
+                recorder.noteFailure(error.observabilityClassification)
+                ObservabilityEmission.emitTerminal(recorder, outcome: .degraded)
+                return makeDeterministicSummary(
+                    userId: userId,
+                    context: context,
+                    primaryRisk: primaryRisk
+                )
             }
+
+            if staleStoredCandidate != nil {
+                do {
+                    try await insights.upsert(generated)
+                } catch {
+                    // ADR-032: monthly `.summary` is a current-state cache, not a core fact.
+                    // ADR-020: optional enrichment durability must not fail deterministic Home.
+                    // The validated insight already exists in memory (same as first-generation
+                    // Home, which does not persist). Show it ephemerally; durable cache is unchanged.
+                    recorder.noteFailure(
+                        error.observabilityClassification.stage == .insightPersistence
+                            ? error.observabilityClassification
+                            : ObservabilityErrorMapping.classify(
+                                code: .persistenceFailure,
+                                stage: .insightPersistence
+                            )
+                    )
+                    ObservabilityEmission.emitTerminal(recorder, outcome: .degraded)
+                    return generated
+                }
+            }
+            ObservabilityEmission.emitTerminal(recorder, outcome: .success)
+            return generated
         }
 
         return makeDeterministicSummary(

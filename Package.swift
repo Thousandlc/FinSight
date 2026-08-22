@@ -43,7 +43,7 @@ let package = Package(
         ),
         .target(
             name: "YoushuAI",
-            dependencies: ["YoushuDomain"],
+            dependencies: ["YoushuDomain", "YoushuFoundation"],
             path: "Modules/YoushuAI/Sources/YoushuAI"
         ),
         .testTarget(
@@ -58,7 +58,7 @@ let package = Package(
         ),
         .testTarget(
             name: "YoushuDataTests",
-            dependencies: ["YoushuData", "YoushuDomain"],
+            dependencies: ["YoushuData", "YoushuDomain", "YoushuFoundation"],
             path: "Modules/YoushuData/Tests/YoushuDataTests"
         ),
         .testTarget(

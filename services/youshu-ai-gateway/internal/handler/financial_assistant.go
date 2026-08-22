@@ -17,23 +17,29 @@ type FinancialAssistantHandler struct {
 
 func (h *FinancialAssistantHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
+		observeValidationFailure(r, contract.ErrInvalidRequest)
 		h.writeError(w, http.StatusMethodNotAllowed, "", contract.ErrInvalidRequest, "仅支持 POST 请求。", nil)
 		return
 	}
 
 	var req contract.RequestEnvelope
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		observeValidationFailure(r, contract.ErrInvalidRequest)
 		h.writeError(w, http.StatusBadRequest, "", contract.ErrInvalidRequest, "请求格式无效。", nil)
 		return
 	}
 
 	requestID := strings.TrimSpace(req.RequestID)
 	if requestID == "" {
+		observeValidationFailure(r, contract.ErrInvalidRequest)
 		h.writeError(w, http.StatusBadRequest, "", contract.ErrInvalidRequest, "缺少 requestId。", nil)
 		return
 	}
 
+	setOperation(r, req.Operation)
+
 	if req.SchemaVersion != h.SchemaVersion {
+		observeValidationFailure(r, contract.ErrUnsupportedSchemaVersion)
 		h.writeError(w, http.StatusBadRequest, requestID, contract.ErrUnsupportedSchemaVersion, "不支持的 schema 版本。", nil)
 		return
 	}
@@ -42,6 +48,7 @@ func (h *FinancialAssistantHandler) ServeHTTP(w http.ResponseWriter, r *http.Req
 	case contract.OperationMonthlySummary:
 		h.handleMonthlySummary(w, r, req, requestID)
 	default:
+		observeValidationFailure(r, contract.ErrUnsupportedOperation)
 		h.writeError(w, http.StatusBadRequest, requestID, contract.ErrUnsupportedOperation, "当前不支持该操作。", nil)
 	}
 }
@@ -53,10 +60,12 @@ func (h *FinancialAssistantHandler) handleMonthlySummary(
 	requestID string,
 ) {
 	if req.MonthlySummaryFacts == nil {
+		observeValidationFailure(r, contract.ErrInvalidRequest)
 		h.writeError(w, http.StatusBadRequest, requestID, contract.ErrInvalidRequest, "monthlySummary 缺少 monthlySummaryFacts。", nil)
 		return
 	}
 	if err := ValidateRequestEnvelope(req); err != nil {
+		observeValidationFailure(r, contract.ErrInvalidRequest)
 		h.writeError(w, http.StatusBadRequest, requestID, contract.ErrInvalidRequest, formatRiskValidationError(err), nil)
 		return
 	}
@@ -64,11 +73,13 @@ func (h *FinancialAssistantHandler) handleMonthlySummary(
 	draft, err := h.Upstream.CompleteMonthlySummary(r.Context(), req)
 	if err != nil {
 		status, code, message, retryAfter := mapUpstreamError(err)
+		observeUpstreamFailure(r, err, code)
 		h.writeError(w, status, requestID, code, message, retryAfter)
 		return
 	}
 
 	if err := ValidateDraft(draft); err != nil {
+		observeDraftValidationFailure(r)
 		h.writeError(w, http.StatusBadGateway, requestID, contract.ErrInvalidProviderResponse, "上游响应未通过 schema 校验。", nil)
 		return
 	}
@@ -79,9 +90,51 @@ func (h *FinancialAssistantHandler) handleMonthlySummary(
 		ModelAlias:    h.ModelAlias,
 		Draft:         draft,
 	}
+	body, err := json.Marshal(resp)
+	if err != nil {
+		observeEncodingFailure(r)
+		h.writeError(w, http.StatusInternalServerError, requestID, contract.ErrInternalError, "服务异常，请稍后再试。", nil)
+		return
+	}
+	observeSuccess(r)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(resp)
+	_, _ = w.Write(body)
+}
+
+func writeJSONResponse(w http.ResponseWriter, status int, payload any) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_, writeErr := w.Write(body)
+	return writeErr
+}
+
+func (h *FinancialAssistantHandler) writeError(
+	w http.ResponseWriter,
+	status int,
+	requestID string,
+	code string,
+	message string,
+	retryAfter *int,
+) {
+	resp := contract.ErrorEnvelope{
+		SchemaVersion: h.SchemaVersion,
+		RequestID:     requestID,
+		Error: contract.GatewayErrorBody{
+			Code:              code,
+			Message:           message,
+			RetryAfterSeconds: retryAfter,
+		},
+	}
+	if err := writeJSONResponse(w, status, resp); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`{"schemaVersion":"v1","requestId":"","error":{"code":"internalError","message":"服务异常，请稍后再试。"}}`))
+	}
 }
 
 func ValidateDraft(d contract.AssistantAnswerDraftDTO) error {
@@ -179,26 +232,4 @@ func isValidKeyFactValue(v contract.KeyFactValue) bool {
 	default:
 		return false
 	}
-}
-
-func (h *FinancialAssistantHandler) writeError(
-	w http.ResponseWriter,
-	status int,
-	requestID string,
-	code string,
-	message string,
-	retryAfter *int,
-) {
-	resp := contract.ErrorEnvelope{
-		SchemaVersion: h.SchemaVersion,
-		RequestID:     requestID,
-		Error: contract.GatewayErrorBody{
-			Code:              code,
-			Message:           message,
-			RetryAfterSeconds: retryAfter,
-		},
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(resp)
 }

@@ -1,5 +1,6 @@
 import Foundation
 import YoushuDomain
+import YoushuLogging
 
 /// Wires Domain overview services to repository ports.
 public struct OverviewServiceContainer: Sendable {
@@ -29,6 +30,7 @@ public struct OverviewServiceContainer: Sendable {
         financialAssisting: any FinancialAssisting,
         consentService: AIDataConsentService? = nil
     ) {
+        ObservabilityLogSink.install()
         let assistantService = FinancialAssistantService(
             accounts: accounts,
             transactions: transactions,

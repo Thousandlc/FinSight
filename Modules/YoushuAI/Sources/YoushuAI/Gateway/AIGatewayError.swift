@@ -5,6 +5,8 @@ public enum AIGatewayError: Error, Equatable, Sendable {
     case invalidRequest
     case unauthorized
     case rateLimited(retryAfterSeconds: Int?)
+    case gatewayRateLimited(retryAfterSeconds: Int?)
+    case providerRateLimited(retryAfterSeconds: Int?)
     case providerUnavailable
     case providerTimeout
     case invalidProviderResponse
@@ -32,7 +34,7 @@ public enum AIGatewayError: Error, Equatable, Sendable {
             return "请求无效，请稍后重试。"
         case .unauthorized:
             return "服务未授权，请联系支持。"
-        case .rateLimited:
+        case .rateLimited, .gatewayRateLimited, .providerRateLimited:
             return "请求过于频繁，请稍后再试。"
         case .providerUnavailable:
             return "AI 服务暂时不可用。"
