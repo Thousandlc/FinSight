@@ -756,15 +756,15 @@ allowFinancialContextToAI: Bool
 retainOriginalImages: Bool
 ```
 
+四个字段均为 production user-controllable。缺失 persisted consent 时：`fetchOrDefault` → `deniedDefault`。
+
 ### 数据语义
 
-#### allowScreenshotImageToAI
+#### allowScreenshotImageToAI / allowDebtScanImageToAI
 
-允许交易截图发送给远程 AI 识别。
+这两个字段控制 **未来 AI 图片处理资格**（交易截图识别 / 债务账单扫描）。
 
-#### allowDebtScanImageToAI
-
-允许债务扫描图片发送给远程 AI。
+它们 **不等于** 原图保留。授权识别或扫描不会自动保存原图。
 
 #### allowFinancialContextToAI
 
@@ -781,9 +781,29 @@ Consent revoke **不自动删除** historical `FinancialInsight` records；仅�
 
 #### retainOriginalImages
 
-控制是否保存原图。
+独立于图片 AI 传输授权。
 
-默认策略应偏向 false / 最小保存。
+```text
+default false
+independent of image AI transmission permission
+true  = permit app-private original-image retention
+false = no persistent original binary
+true → false = stop future retention + purge prior user-retained originals
+```
+
+---
+
+## 22.1 Media lifecycle
+
+Persisted media 由两部分组成：
+
+```text
+MediaArtifact metadata（JSON Store）
++
+DirectoryMediaBinaryStore retained binary（app-private filesystem）
+```
+
+Retained originals **不是** financial facts。Backup v1 仍排除 `MediaArtifact` / original images（ADR-033）。JSON Store 保持 schema v4；ADR-034 不要求 schema migration。
 
 ---
 
@@ -836,6 +856,8 @@ v1 → v4 migration
 ```
 
 `FinancialInsight.freshnessMetadata` 为 optional。legacy 记录缺少该字段时安全 decode 为 nil。**ADR-032 不需要 schema migration。**
+
+**JSON Store remains schema v4. ADR-034 requires no schema migration.**
 
 历史 store：
 
@@ -918,22 +940,24 @@ Backup file = authenticated encrypted envelope（PBKDF2-HMAC-SHA256 / 600,000 / 
 
 ### Screenshot
 
-理想生命周期：
+当前实现语义：
 
 ```text
-选择图片
- ↓
-识别
- ↓
-Draft
- ↓
-确认
- ↓
-Transaction / Debt
- ↓
-若 retainOriginalImages == false
-删除 / 不持久化原图
+select image
+→ image AI consent gate
+→ in-memory recognition processing
+→ Imported Draft
+→ user confirmation
+→ Transaction / Debt
+
+retainOriginalImages == false
+→ no persistent original binary
+
+retainOriginalImages == true
+→ eligible original may remain as user-retained media
 ```
+
+AI 处理 **不意味着** 一定发生远程发送；是否发送取决于当前 consent 与实际 Provider 路径。授权识别 ≠ 保留原图。
 
 ### Financial Facts
 
@@ -960,21 +984,54 @@ ADR-020 deterministic Home fallback **不持久化**。
 
 ## 26. 删除与恢复
 
-当前 Domain 已存在用户数据 wipe 能力；**Backup / Restore v1 已实现**（ADR-033，2026-08-21 VERIFIED）。
+必须区分三条生命周期，不得混用：
 
-Backup v1 提供 **manual encrypted portable backup + full-replace restore** — 不是 merge，不是 Export，不是 Cloud Sync。
+### Consent revoke
 
-未来仍须区分：
+权限 / 生命周期变化，**不是** historical AI 删除。
 
-- 删除单笔 Transaction
-- 删除 Account
-- 删除 Debt
-- 撤销 AI Consent
-- 删除识别原图
-- 清空全部用户财务数据
-- human-readable Export（**仍开放**）
-- automatic / cloud backup（**仍开放**）
-- 备份 / 恢复（**v1 已实现 — manual portable encrypted**）
+Financial-context revoke：停止新的 financial-context AI 使用与当前 Home enrichment；**不自动删除** historical `FinancialInsight`。
+
+### Full local wipe（ADR-034 — IMPLEMENTED / VERIFIED 2026-08-21）
+
+当前用户本地数据删除，采用 monotonic privacy semantics：
+
+```text
+current-user financial data
+AI consent
+historical insight
+recognition/media metadata
+retained original binaries
+→ deleted
+```
+
+```text
+external .finsightbackup
+→ not deleted
+```
+
+Post-wipe：
+
+```text
+deleted current user
+→ application bootstrap
+→ valid clean/new session
+→ consent deny-default
+```
+
+Wipe **不是** Restore full-replace。成功 persistent deletion 后建立新/空会话；失败不得假装已换成干净会话。部分原图清理失败可区分且可重试，且不得回滚已删除的财务数据。
+
+### Backup / Restore（ADR-033）
+
+Backup v1 提供 **manual encrypted portable backup + full-replace restore** — 不是 merge，不是 Export，不是 Cloud Sync，也不是 local wipe。
+
+Restore 后：财务事实恢复；`AIDataConsent` / `FinancialInsight` / `MediaArtifact` / retained originals **不** 从 backup 恢复。
+
+仍开放：
+
+- 删除单笔 Transaction / Account / Debt（既有实体删除）
+- human-readable Export
+- automatic / cloud backup
 
 ---
 

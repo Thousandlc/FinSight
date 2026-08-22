@@ -1,8 +1,8 @@
 # 知数 · FinSight — Current Status
 
 > 文档角色：项目当前存档点 / 新 Chat 恢复入口  
-> 版本：v1.0  
-> **Last Updated：2026-08-21（ADR-033 Backup / Restore v1 Context Sync）**  
+> 版本：v1.0
+> **Last Updated：2026-08-21（Privacy & AI Settings Closure / ADR-034 Context Sync）**
 > 本文件应频繁更新；旧状态不应无限累积，重大历史移入 Decision Log。
 
 ---
@@ -69,6 +69,9 @@ Swift / SwiftUI
 Domain / Data / AI / UI 分层
 Local JSON Store
 Manual Portable Backup v1（encrypted .finsightbackup）
+Unified Privacy & AI Settings
+Original-image retention（DirectoryMediaBinaryStore）
+Delete-All local data（ADR-034）
 ```
 
 ### Swift Package 拓扑（2026-08-21）
@@ -89,7 +92,8 @@ Modules/Package.swift
 
 - 仓库 remote：`Thousandlc/FinSight`（private）
 - Apple-only integration gate：GitHub Actions `ios-apple-gate.yml`（`workflow_dispatch`, `macos-15`）
-- 当前 Apple Backup/Restore gate：**green**（run **32443787799**, HEAD `967c0c5`, Xcode **16.4**）
+- 当前 Apple Privacy & AI Settings Closure gate：**green**（run **32470000762**, HEAD `b5a199cf87e12b3ebfcf1a2de2bf94e8f2329702`, Xcode **16.4**）
+- 历史 Apple Backup/Restore gate：green（run **32443787799**, HEAD `967c0c5`, Xcode **16.4**）— **不再是当前基线**
 
 历史代码模块：
 
@@ -293,6 +297,8 @@ Regression：
 
 ## 9. Consent / Privacy
 
+**Privacy & AI Settings Closure：`IMPLEMENTED / VERIFIED — 2026-08-21`**
+
 核心 `AIDataConsent` 已建立，包含：
 
 ```text
@@ -302,19 +308,75 @@ allowFinancialContextToAI
 retainOriginalImages
 ```
 
-已完成的重要架构动作：
+### Unified settings
 
-- Assistant Financial Context 有统一 consent 门禁。
-- 支持撤销授权。
-- AI payload 与 Domain Context 分离。
-- 原图保留可配置，产品原则为最小化。
+生产导航：
 
-历史遗留 / 应复核：
+```text
+账户
+→ 隐私与 AI
+```
 
-- 全局“隐私与 AI”设置 UI 是否已覆盖全部字段。
-- `retainOriginalImages` UI 是否最终完成。
-- 全量数据删除入口是否已经暴露。
-- 截图、债务扫描、Assistant 三条 consent 文案是否与真实 payload 完全一致。
+四个字段均已暴露，且独立可管理。Canonical state：
+
+```text
+UI
+→ PrivacyAISettingsViewModel
+→ AIDataConsentService
+→ persisted AIDataConsent
+```
+
+无独立 Account shadow consent state。截图、债务扫描、AI Assistant 的情境式首次授权仍保留，并写入同一 persisted source。
+
+### Consent behavior
+
+Screenshot / debt-scan / financial-context 均支持 grant + revoke。缺失 consent 仍为 deny-by-default。`evaluatePurchase` 受 financial-context consent 门禁。
+
+Financial-context revoke：
+
+```text
+no new financial-context AI transmission
+Home deterministic summary
+no current persisted AI monthly summary enrichment
+historical FinancialInsight retained
+```
+
+### Original image retention
+
+```text
+default false
+production DirectoryMediaBinaryStore
+false → no persistent original binary
+true → eligible originals retained app-privately
+true → false → disable future retention first + purge previously retained originals
+cleanup failure → preference remains false + retryable warning
+```
+
+Image AI consent ≠ image retention.
+
+### Delete-All（ADR-034）
+
+生产可达的本地全量删除入口位于「隐私与 AI」设置。语义：
+
+```text
+local wipe
+→ retained-media cleanup
+→ users.delete cascade
+→ monotonic no-rollback semantics
+→ post-wipe bootstrap
+```
+
+External `.finsightbackup` remains untouched.
+
+### Privacy copy
+
+生产面向用户的 Privacy / AI 披露已通过 `PrivacyAIDisclosureCopy` 对齐当前 runtime：
+
+- 所选图片在需要远程 AI 处理时可能发送至 AI 服务
+- 财务上下文为最小化 / 聚合摘要
+- consent revoke ≠ historical insight deletion
+- image consent ≠ retention
+- local wipe ≠ deletion of Files backup
 
 ---
 
@@ -553,39 +615,55 @@ RemoteFinancialAIProvider
 
 ## 16. 测试状态
 
-### 2026-08-21 Backup / Restore v1 Step 6 — 当前实测基线
+### 2026-08-21 Privacy & AI Settings Closure Step 6 / Step 7A — 当前实测基线
 
-以下数字来自 **2026-08-21 Step 6 final verification**（Windows + Apple 两个 platform gates；**不得** 将 532 + 471 相加为 unique tests — 大量 Domain/Data tests overlap）。
+以下数字来自 **2026-08-21 Privacy & AI Settings Closure final verification**（Windows + Apple 两个 platform gates）。
+
+```text
+Windows 556 and Apple 521 are separate platform gates.
+Do not add them as unique tests.
+```
 
 **Windows gate**（`scripts/test-windows.bat` + `swift build -c release`）：
 
 ```text
-Foundation:  10 passed
-Domain:     362 passed
-Data:        99 passed
-AI:          61 passed
-Total:      532 passed
+Foundation:  10 PASS
+Domain:     385 PASS
+Data:       100 PASS
+AI:          61 PASS
+Total:      556 PASS
 Failed:       0
 
-swift build -c release: PASS
+swift build -c release:
+PASS
 ```
 
-**Apple gate**（GitHub Actions run **32443787799**, HEAD `967c0c5`, Xcode **16.4**, iOS Simulator）：
+HEAD：`b5a199cf87e12b3ebfcf1a2de2bf94e8f2329702`
+
+**Apple gate**（GitHub Actions run **32470000762**, HEAD `b5a199cf87e12b3ebfcf1a2de2bf94e8f2329702`, Xcode **16.4**, iOS Simulator）：
 
 ```text
-YoushuUITests:      10 passed
-YoushuDataTests:    99 passed
-YoushuDomainTests: 362 passed
-Total:             471 passed
-Failed:              0
-
-Processed Info.plist: app.finsight.backup / .finsightbackup verified
+YoushuUITests:       36 PASS
+YoushuDataTests:    100 PASS
+YoushuDomainTests:  385 PASS
+Total:              521 PASS
+Failed:                0
 ```
 
 Gateway tests：
 
 ```text
-NOT rerun for Backup/Restore v1 because Gateway code/contracts were unchanged.
+NOT rerun for Privacy & AI Settings Closure because Gateway code/contracts were unchanged.
+```
+
+### 2026-08-21 Backup / Restore v1 — 历史基线（归档）
+
+以下数字来自 **2026-08-21 ADR-033 Backup / Restore v1 Step 6**（run **32443787799**, HEAD `967c0c5`）。
+**不再是当前基线。**
+
+```text
+Windows: Foundation 10 / Domain 362 / Data 99 / AI 61 / Total 532 PASS
+Apple:   YoushuUITests 10 / YoushuDataTests 99 / YoushuDomainTests 362 / Total 471 PASS
 ```
 
 ### 2026-08-20 ADR-032 Step 5A — 历史基线（归档）
@@ -654,7 +732,7 @@ Domain 309 / Data 6 / AI 61 / Total 376
 Domain 314 / Data 6 / AI 61 / Total 381
 ```
 
-上述 **138 / 376 / 381 / 385** 等旧数字 **不再是当前基线**（当前为 **427**）。
+上述 **138 / 376 / 381 / 385 / 427 / 532 / 471** 等旧数字 **不再是当前基线**（当前为 Windows **556** / Apple **521**）。
 
 典型一致性：
 
@@ -696,6 +774,30 @@ Application Support/Youshu/youshu-store.json
 ```
 
 **不得随意 rename**（ADR-022）。
+
+App-private retained originals 是 JSON Store 的 **sibling local storage**，不是 schema v4 的一部分：
+
+```text
+Application Support/Youshu/media-originals/
+```
+
+### Local wipe v1 — IMPLEMENTED / VERIFIED（2026-08-21，ADR-034）
+
+```text
+Status: IMPLEMENTED / VERIFIED
+ADR:    ADR-034
+Date:   2026-08-21
+```
+
+能力摘要：
+
+- 生产可达 Delete-All local data UI
+- monotonic media cleanup + `users.delete` cascade
+- distinguishable complete / media-partial / persistent-store failure
+- successful persistent deletion → bootstrap valid new/empty session
+- external `.finsightbackup` untouched
+
+JSON Store remains schema v4；ADR-034 requires no schema migration.
 
 ### Backup / Restore v1 — IMPLEMENTED / APPLE-CI VERIFIED（2026-08-21）
 
@@ -811,9 +913,30 @@ Trust 与 Freshness / Consent 是 **三个独立维度**（见 §18.2）。
 7. **physical-device Files smoke — NOT RUN**（pre-release manual gate；见 §17.1）
 8. **Production observability 不完整**
 9. **Token / cost telemetry 尚未完全接 production**
-10. **隐私设置 UI 覆盖度需重新核验**（含 `retainOriginalImages`）
-11. **真实图片识别准确率缺少稳定 baseline**
-12. **大数据量 JSON Store 性能未压测**
+10. **真实图片识别准确率缺少稳定 baseline**
+11. **大数据量 JSON Store 性能未压测**
+
+### P2 级
+
+12. **`AIDataConsentService.save(_:)` public visibility hardening**
+13. **`Subscription` store/Backup representation without `RepositoryContainer` wiring**（wipe 已通过 `YoushuStore.deleteUser` 覆盖）
+
+Do not promote these P2 items to P0/P1 without evidence.
+
+### RESOLVED / CLOSED（2026-08-21 — Privacy & AI Settings Closure / ADR-034）
+
+```text
+Privacy & AI Settings Closure
+— VERIFIED 2026-08-21
+```
+
+CLOSED：
+
+- unified Privacy & AI Settings UI covering all four `AIDataConsent` fields
+- original-image retention production closure
+- Delete-All local data UI
+- privacy copy alignment
+- ADR-034 monotonic local wipe + post-wipe session bootstrap
 
 ### RESOLVED / CLOSED（2026-08-21 — ADR-033）
 
@@ -848,8 +971,9 @@ Trust 与 Freshness / Consent 是 **三个独立维度**（见 §18.2）。
 6. 完成 observability 设计与本地验证。
 7. 修复 remote-AI-to-Home 的耦合架构。
 8. ~~建立 Backup / Export 方案。~~ **Backup v1 已实现（ADR-033）；Export / cloud backup 仍开放。**
-9. 补 Consent / Privacy UI。
+9. ~~补 Consent / Privacy UI。~~ **Privacy & AI Settings Closure 已完成（2026-08-21）；不再重建。**
 10. 真机仅验证不依赖公网 AI 的本地能力（若环境条件允许）。
+    - physical-device Files smoke 仍为 **NOT RUN**
 
 ### Stage B — ICP 完成后
 
@@ -907,6 +1031,7 @@ domain / DNS
 - TestFlight 构建成功
 - 数据存储迁移
 - Backup / Restore v1 实现与 verification 完成（ADR-033）
+- Privacy & AI Settings Closure / ADR-034 完成（2026-08-21）
 - 模块 rename
 - 大 milestone 完成
 - 全量测试数字发生显著变化
@@ -917,4 +1042,4 @@ domain / DNS
 
 ## 22. 当前一句话存档
 
-**截至 2026-08-21，FinSight 的核心财务 Domain、现金流（7/30/60/90）、多债务、Consent、AI Context、Answer Validator、Stored Insight trust boundary（VERIFIED SAFE）、ADR-032 Stored Insight freshness/lifecycle（RESOLVED）、FinancialRiskPolicyEngine（regression-covered）、C2B KeyFact / Gateway materialization、ADR-020 Home AI failure isolation（FIXED）、以及 ADR-033 manual encrypted Backup / full-replace Restore（IMPLEMENTED / APPLE-CI VERIFIED）已建立到较成熟的内部 MVP 阶段；Windows 当前基线 **532 tests PASS** + release build PASS；Apple gate **471 tests PASS**（run 32443787799, Xcode 16.4）；physical-device Files smoke NOT RUN；Gateway ECS 运行态仅保留 2026-08-18 documented snapshot；ICP 备案 pending，公网 HTTPS、iOS production wiring 与真实 Bailian production smoke 仍明确禁止。**
+**截至 2026-08-21，FinSight 的核心财务 Domain、现金流（7/30/60/90）、多债务、Consent、AI Context、Answer Validator、Stored Insight trust boundary（VERIFIED SAFE）、ADR-032 Stored Insight freshness/lifecycle（RESOLVED）、FinancialRiskPolicyEngine（regression-covered）、C2B KeyFact / Gateway materialization、ADR-020 Home AI failure isolation（FIXED）、ADR-033 manual encrypted Backup / full-replace Restore（IMPLEMENTED / APPLE-CI VERIFIED）、以及 Privacy & AI Settings Closure / ADR-034 monotonic local wipe（IMPLEMENTED / VERIFIED）已建立到较成熟的内部 MVP 阶段；Windows 当前基线 **556 tests PASS** + release build PASS；Apple gate **521 tests PASS**（run 32470000762, HEAD `b5a199cf87e12b3ebfcf1a2de2bf94e8f2329702`, Xcode 16.4）；physical-device Files smoke NOT RUN；Gateway ECS 运行态仅保留 2026-08-18 documented snapshot；ICP 备案 pending，公网 HTTPS、iOS production wiring 与真实 Bailian production smoke 仍明确禁止。不把 Windows 556 与 Apple 521 相加为 unique tests。**

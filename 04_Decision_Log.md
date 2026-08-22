@@ -1288,6 +1288,217 @@ ADR-033 adds the portable recovery layer **on top of** ADR-021 JSON Store; it do
 
 ---
 
+## ADR-034 — Local full-data wipe uses monotonic deletion and post-wipe session bootstrap
+
+**日期：2026-08-21**
+**状态：Accepted / Implemented — VERIFIED 2026-08-21**
+
+### Context
+
+FinSight user-owned local state is no longer confined to one persistence representation.
+
+Current relevant persistence spans:
+
+```text
+JSON Document Store
++
+app-private retained original-image binaries
+```
+
+A full local-data wipe therefore cannot truthfully be modeled as one atomic transaction across JSON persistence and filesystem media.
+
+Attempting rollback by recreating already-deleted sensitive data would be contrary to the privacy objective.
+
+A successful store wipe also deletes the active persisted `User`; leaving `AppSession` and ViewModels bound to that deleted identity would create stale/invalid application state.
+
+### Decision
+
+#### A. Wipe is local user-data deletion
+
+Full wipe targets the selected/current user's FinSight local data.
+
+It includes current-user persisted financial / AI / privacy records and retained original-image binaries.
+
+It does NOT automatically delete:
+
+```text
+external user-controlled .finsightbackup files
+remote/server data
+```
+
+Wipe is distinct from:
+
+```text
+Consent revoke
+Backup
+Restore
+Export
+remote account deletion
+```
+
+#### B. Monotonic deletion
+
+Deletion uses monotonic privacy semantics:
+
+```text
+once sensitive data is successfully deleted
+→ it is not recreated merely to simulate rollback
+```
+
+Current implementation ordering:
+
+```text
+attempt user-scoped retained-media binary cleanup
+→ canonical users.delete / YoushuStore.deleteUser cascade
+```
+
+Safe deletion continues where possible even if an independent deletion component fails.
+
+#### C. Result taxonomy
+
+The operation distinguishes:
+
+```text
+complete
+mediaCleanupIncomplete
+persistentDeletionIncomplete
+```
+
+Semantics:
+
+##### complete
+
+```text
+user/store deletion complete
++
+retained original cleanup complete
+```
+
+##### mediaCleanupIncomplete
+
+```text
+user/store deletion complete
++
+one or more retained originals could not be removed
+```
+
+Consequences:
+
+- deleted financial data is NOT restored
+- deleted user remains deleted
+- application may bootstrap a new/clean session
+- leftover media cleanup remains observable/retryable against the wiped user identity
+
+##### persistentDeletionIncomplete
+
+```text
+canonical JSON/user cascade did not complete
+```
+
+Consequences:
+
+- do not claim full wipe success
+- do not pretend a new empty session has replaced authoritative remaining store state
+
+#### D. Cross-user isolation
+
+Wipe is user-scoped.
+
+Deleting User A must not delete User B:
+
+- financial facts
+- consent
+- AI insights
+- recognition state
+- media metadata/binaries
+
+#### E. Post-wipe session bootstrap
+
+After successful persistent deletion:
+
+```text
+deleted active user
+→ AppSession bootstrap
+→ valid existing other user OR newly-created empty local user
+→ application data revision bump
+→ transient state reset
+→ financial presentation reload
+```
+
+The app must not continue operating with:
+
+```text
+currentUserId == deletedUserId
+```
+
+Normal successful wipe must not require app restart.
+
+#### F. Consent / AI lifecycle
+
+Full wipe deletes the old user's:
+
+```text
+AIDataConsent
+FinancialInsight
+AIRecognitionRecord
+```
+
+A newly bootstrapped user resolves to deny-by-default consent.
+
+This differs from ordinary financial-context Consent revoke, which preserves historical `FinancialInsight`.
+
+#### G. Backup relationship
+
+ADR-033 remains unchanged.
+
+External `.finsightbackup` artifacts are user-controlled portable backups and are not deleted by local wipe.
+
+A later restore from such a backup remains permitted under ADR-033:
+
+```text
+financial facts restored
+AIDataConsent not restored
+FinancialInsight not restored
+MediaArtifact / retained originals not restored
+```
+
+#### H. Persistence compatibility
+
+ADR-034 does NOT change:
+
+```text
+JSON schema v4
+Application Support/Youshu/youshu-store.json
+BackupPayloadV1
+Backup format version
+```
+
+### Consequences
+
+Positive:
+
+- deletion behavior is truthful across JSON + filesystem persistence
+- privacy deletion is not weakened by artificial rollback
+- partial media cleanup is visible/retryable
+- stale deleted-user sessions are prevented
+- external user backups remain under user control
+
+Trade-offs:
+
+- wipe is not a cross-resource atomic transaction
+- partial cleanup states must be represented
+- media cleanup may need retry after financial/store deletion has completed
+
+### Relationship
+
+Supports / relates to: ADR-015, ADR-016, ADR-021, ADR-030, ADR-033
+
+Do **not** merge ADR-034 into ADR-033.
+
+Backup/Restore and local wipe are separate lifecycle contracts.
+
+---
+
 # ADR 变更模板
 
 以后新增：

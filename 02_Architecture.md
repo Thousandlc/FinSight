@@ -57,6 +57,7 @@ FinSight 的架构优先保证：
 ┌──────────────────────────────────────────────┐
 │             Repository / Data                │
 │ Local JSON Store                            │
+│ App-private retained original-image binaries │
 └──────────────────────────────────────────────┘
 ```
 
@@ -130,6 +131,7 @@ TabView
 ├── 账单
 ├── 债务
 ├── 账户
+│   └── 隐私与 AI
 └── AI
 ```
 
@@ -663,6 +665,18 @@ retainOriginalImages
 
 门禁由 Service 层执行，而不是只依赖 UI 隐藏按钮。
 
+当前生产可达的统一设置链：
+
+`	ext
+账户
+→ PrivacyAISettingsView
+→ PrivacyAISettingsViewModel
+→ AIDataConsentService
+→ persisted AIDataConsent
+`
+
+四个字段均可独立管理。截图、债务扫描、AI Assistant 的情境式首次授权仍走同一 persisted source。不存在 UI-only shadow consent state。缺失 persisted consent 时仍为 **deny-by-default**。
+
 原则：
 
 ```text
@@ -703,6 +717,75 @@ Consent denied 时：使用 deterministic Home summary；不展示 stored AI sum
 
 Consent 与 Freshness 是 Home current AI summary 的两个独立 gate（见 §12 Home Two-Gate Architecture）。
 
+### Unified Privacy & AI Settings（IMPLEMENTED / VERIFIED 2026-08-21）
+
+生产导航：
+
+`	ext
+账户
+→ 隐私与 AI
+`
+
+Settings UI 管理全部四个 AIDataConsent 字段；情境式 consent sheets 继续存在，但写入同一 canonical service。
+
+### Original-image retention（IMPLEMENTED / VERIFIED 2026-08-21）
+
+`	ext
+AIDataConsent.retainOriginalImages
+→ MediaLifecycleService
+→ DirectoryMediaBinaryStore
+→ app-private retained originals
+`
+
+生产根语义（相对 live store，不暴露绝对 runtime path）：
+
+`	ext
+Application Support/Youshu/media-originals/
+`
+
+语义：
+
+`	ext
+false → no persistent original binary
+true  → .userRetained original may persist
+disable → preference false first → purge retained originals
+`
+
+Apple-specific filesystem properties（与 ADR-033 Backup exclusion 分离）：
+
+`	ext
+iOS file protection applied by DirectoryMediaBinaryStore
+Apple filesystem backup exclusion applied to retained-original storage
+`
+
+- FinSight Backup v1 excludes media by **payload contract**（ADR-033）
+- Apple filesystem backup exclusion is a **separate platform storage property**
+
+Image AI consent ≠ image retention.
+
+### Local full-data wipe（ADR-034 — IMPLEMENTED / VERIFIED 2026-08-21）
+
+`	ext
+PrivacyAISettingsView
+→ deletion confirmation
+→ PrivacyDataService
+   ├─ user-scoped media binary cleanup
+   └─ users.delete / YoushuStore.deleteUser cascade
+→ PrivacyWipeResult
+→ ApplicationPrivacyWipeReset
+→ bootstrap + applicationDataRevision + transient reset
+`
+
+Outcomes:
+
+`	ext
+complete
+mediaCleanupIncomplete
+persistentDeletionIncomplete
+`
+
+Monotonic privacy semantics：once sensitive data is successfully deleted, it is not recreated merely to simulate rollback. Successful persistent deletion bootstraps a valid new/empty session. External .finsightbackup files are not targeted.
+
 ---
 
 ## 15. 数据持久化
@@ -740,7 +823,22 @@ Backup / Restore v1 **不迁移、不重命名** live store path。ADR-022 仍�
 4. 成功后再切换。
 5. 保留 rollback / recovery 策略。
 
-### 15.2 Manual Portable Backup v1（ADR-033 — IMPLEMENTED / VERIFIED 2026-08-21）
+**ADR-034 不改变 JSON Store schema v4 或 live store path。**
+
+### 15.2 App-private retained original-image storage
+
+Retained originals are an **additional local storage layer**, not a replacement for JSON Store and not a Backup v1 payload.
+
+`	ext
+Application Support/Youshu/media-originals/
+`
+
+JSON Store 继续保存 MediaArtifact metadata；eligible binaries 仅在 
+etainOriginalImages == true 时由 DirectoryMediaBinaryStore 落盘。
+
+这与 ADR-033 Backup exclusion 是不同合同：Backup v1 按 payload 排除 media；Apple filesystem backup exclusion 是平台存储属性。
+
+### 15.3 Manual Portable Backup v1（ADR-033 — IMPLEMENTED / VERIFIED 2026-08-21）
 
 Backup v1 是在 JSON Store 之上的 **portable recovery layer**，不是 Cloud Sync，也不是 human-readable Export。
 
@@ -791,7 +889,7 @@ ApplicationRestoreRefresh（session + ViewModels + presentation subtree）
 - Excluded from backup/restore carry-forward：`FinancialInsight`, `AIDataConsent`, `AIRecognitionRecord`, `MediaArtifact`, `PendingDebtLink`, `SuspectedDebt`；restore 后 `debtImportInProgress = false`；AI consent → deniedDefault
 - Derived read models（Summary / CashFlow / Risk / HomeOverview 等）restore 后重算，不是 backup facts
 
-### 15.3 Remaining persistence gaps
+### 15.4 Remaining persistence gaps
 
 **已解决（v1 scope）：**
 
