@@ -693,7 +693,7 @@ Provider
 
 ### Import Provenance Architecture（ADR-036 — ACCEPTED / IMPLEMENTED — VERIFIED 2026-08-24）
 
-> **Status:** Implemented and verified on candidate `153a23d2d7dbfa570c063156932a646340f0f3f0`. Production image recognition path still uses **`MockAIProvider`**. Real pixel-reading recognition remains **NOT IMPLEMENTED**. Recognition Quality harness ≠ OCR quality.
+> **Status:** Implemented and verified on candidate `153a23d2d7dbfa570c063156932a646340f0f3f0`. Production image recognition path still uses **`MockAIProvider`**. A non-production Apple Vision Transaction pixel recognizer now exists; real accuracy remains **NOT ESTABLISHED**. Recognition Quality harness ≠ OCR quality.
 
 **Implemented flow:**
 
@@ -773,7 +773,8 @@ No automatic field-level merge.
 ```text
 Production TransactionExtracting: MockAIProvider
 Production DebtScanning:          MockAIProvider
-Real pixel-reading recognition:   NOT IMPLEMENTED
+Non-production Transaction pixel recognizer: AppleVisionTransactionRecognizer (IMPLEMENTED)
+Real Debt pixel recognition:      NOT IMPLEMENTED
 ```
 
 ### Transaction Recognition v1 Contract（ADR-037 — ACCEPTED / IMPLEMENTED / VERIFIED 2026-08-24）
@@ -790,10 +791,10 @@ failure
 `recognized` 仅表示得到可审核的 `TransactionDraft`，不表示 Transaction 已持久化、用户已确认、
 字段已全部正确或 provenance 已写入。金额等关键字段仍由 Recognition Quality harness 独立评测。
 
-未来 Apple 实现必须保持以下依赖方向：
+Step 2 Apple 实现保持以下依赖方向：
 
 ```text
-on-device pixel recognizer (future Apple Vision adapter; Infrastructure-only)
+on-device pixel recognizer (Apple Vision adapter; Infrastructure-only)
 → platform-neutral RecognizedTextSpan
 → deterministic TransactionRecognizedTextParsing
 → TransactionRecognitionOutcome / reviewable TransactionDraft
@@ -811,8 +812,9 @@ LLM / Gateway、持久化 Transaction、写 provenance 或绕过用户确认。R
 Recognition Result != Transaction
 ```
 
-Apple Vision implementation 与真实 pixel-reading Transaction recognizer 仍为 **NOT IMPLEMENTED**；production
-`TransactionExtracting` 仍为 `MockAIProvider`。ADR-036 exact-source provenance、currentness 与写入顺序不变。
+Apple Vision implementation 与真实 pixel-reading Transaction recognizer 已在非 production composition 中实现；
+production `TransactionExtracting` 仍为 `MockAIProvider`，真实 accuracy baseline 尚未建立。ADR-036 exact-source
+provenance、currentness 与写入顺序不变。
 
 **Current batch abstraction (unchanged):**
 

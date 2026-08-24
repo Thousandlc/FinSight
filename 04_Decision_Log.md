@@ -2104,7 +2104,7 @@ No real Bailian production image-recognition smoke was performed. `MockAIProvide
 ## ADR-037 — Transaction Recognition v1 uses on-device pixel recognition with deterministic parsing and baseline-gated production eligibility
 
 **日期：2026-08-24**
-**状态：Accepted / Implemented — VERIFIED 2026-08-24 (Step 1 contracts)**
+**状态：Accepted / Implemented — VERIFIED 2026-08-24 (Steps 1–2)**
 
 ### Context
 
@@ -2147,9 +2147,10 @@ the existing Recognition Quality harness continues to measure critical fields in
 direction, date, merchant, and category. Overall recognition success never implies field correctness.
 
 Provider identity, engine version, and whether the recognizer genuinely inspects pixels are exposed through
-`TransactionRecognizerMetadata`. `baselineEligible` requires pixel inspection. Merely conforming to
-`TransactionExtracting` is insufficient; `MockAIProvider` remains ineligible. Establishing a baseline is distinct
-from production eligibility and production readiness, and a real baseline may fail later eligibility thresholds.
+`TransactionRecognizerMetadata`. `baselineEligible` requires real pixel inspection, a non-mock provider identity,
+and reproducible non-empty engine metadata. Merely conforming to `TransactionExtracting` is insufficient;
+`MockAIProvider` remains ineligible. Establishing a baseline is distinct from production eligibility and production
+readiness, and a real baseline may fail later eligibility thresholds.
 
 ### Scope and privacy
 
@@ -2161,12 +2162,23 @@ observability, AI financial-context DTOs, Backup v1, or persisted financial fact
 ### Evaluation
 
 Reuse the existing Recognition Quality corpus, harness, per-field evaluators, and report. Do not create a second
-benchmark framework and do not manufacture a real baseline before a real pixel-reading recognizer exists.
+benchmark framework. Step 2 synthetic/development fixtures make the recognizer baseline-capable but do not establish
+a real accuracy baseline.
+
+### Step 2 implementation
+
+- `AppleVisionTextRecognizer` uses on-device Vision accurate text recognition for `zh-Hans` and `en-US`, returning
+  transient platform-neutral `RecognizedTextSpan` values.
+- `DeterministicTransactionReceiptParser` conservatively supports representative WeChat Pay and Alipay Transaction
+  detail semantics; amount and direction remain required, while date/merchant/account/category may remain unknown.
+- `AppleVisionTransactionRecognizer` composes OCR + parser and truthfully reports pixel inspection, provider identity,
+  and engine version. It is baseline-capable but is not wired into production.
+- OCR text is not persisted, logged, backed up, or sent remotely. Schema v5, Backup v1, Consent, ADR-036 currentness,
+  metadata ordering, confirmation, and provenance remain unchanged.
 
 ### Deferred
 
-- actual Apple Vision implementation — Step 2
-- full WeChat / Alipay deterministic parsing rules — Step 2
+- additional unsupported WeChat / Alipay historical layouts beyond conservative v1 rules
 - real accuracy run and threshold decision
 - production provider switch
 - remote Qwen/VL recognizer or Gateway image endpoint
@@ -2182,6 +2194,9 @@ post-Transaction provenance write, delete/wipe lifecycle, and Backup v1 provenan
 This Step 1 introduces no Apple OCR implementation, production Provider switch, remote image transmission, Consent
 field, Backup v1 change, or JSON Store schema change.
 
+Step 2 adds the non-production local Apple OCR/parser composition only. It introduces no production Provider switch,
+remote image transmission, Consent field, Backup v1 change, or JSON Store schema change.
+
 ### Verification
 
 ```text
@@ -2194,6 +2209,19 @@ Apple: ios-apple-gate.yml run 32707622669
        Xcode 16.4 (16F6), macos-15-arm64 / macOS 15.7.7
        YoushuUITests 58 PASS / YoushuDataTests 114 PASS / YoushuDomainTests 493 PASS
        Total 665 PASS; Failed 0
+
+Step 2 Windows/shared deterministic parser: 20 PASS; Failed 0
+Step 2 Windows/shared Transaction Recognition contract: 5 PASS; Failed 0
+Step 2 Windows/shared Recognition Quality: 26 PASS; Failed 0
+Step 2 Windows/shared ADR-036 targeted regression: 44 PASS; Failed 0
+Step 2 Windows/shared full gate: 771 PASS (108 suites); Failed 0
+Step 2 swift build -c release: PASS
+Step 2 Apple: ios-apple-gate.yml run 32710172471
+       verified candidate 9fc6bfad6e84c137638b5a458889489ea4851c8b
+       Xcode 16.4 (16F6)
+       YoushuUITests 61 PASS / YoushuDataTests 114 PASS / YoushuDomainTests 493 PASS
+       Total 668 PASS; Failed 0
+       Apple Vision focused tests 3 PASS (including synthetic pixel OCR)
 ```
 
 ---
