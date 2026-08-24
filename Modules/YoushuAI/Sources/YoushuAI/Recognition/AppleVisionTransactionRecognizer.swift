@@ -53,7 +53,7 @@ public struct AppleVisionTextRecognizer: Sendable {
     }
 }
 
-/// Non-production composition of real pixel OCR plus deterministic Transaction parsing.
+/// On-device composition of real pixel OCR plus deterministic Transaction parsing.
 public struct AppleVisionTransactionRecognizer: TransactionExtracting {
     public let name = "apple-vision-transaction-v1"
     public let transactionRecognizerMetadata = TransactionRecognizerMetadata(

@@ -39,6 +39,93 @@ struct ScreenshotBookkeepingViewModelTests {
         }
     }
 
+    private final class FixedOutcomeExtractor: TransactionExtracting, @unchecked Sendable {
+        private let lock = NSLock()
+        private let outcome: TransactionRecognitionOutcome
+        private var calls = 0
+
+        init(_ outcome: TransactionRecognitionOutcome) {
+            self.outcome = outcome
+        }
+
+        var name: String { "fixed-outcome" }
+
+        func recognizeTransaction(fromImageData data: Data) async -> TransactionRecognitionOutcome {
+            _ = data
+            lock.withLock { calls += 1 }
+            return outcome
+        }
+
+        func extractTransactionDraft(fromImageData data: Data) async throws -> TransactionDraft {
+            switch await recognizeTransaction(fromImageData: data) {
+            case .recognized(let draft): return draft
+            case .unsupported: throw AIRecognitionError.invalidResponse("暂不支持此类交易截图")
+            case .unreadable: throw AIRecognitionError.imageUnreadable
+            case .failure(let error): throw error
+            }
+        }
+
+        var callCount: Int { lock.withLock { calls } }
+    }
+
+    private actor CompletionGate {
+        private var completed: Set<Int> = []
+        private var continuations: [Int: CheckedContinuation<Void, Never>] = [:]
+
+        func wait(for index: Int) async {
+            if completed.remove(index) != nil { return }
+            await withCheckedContinuation { continuation in
+                continuations[index] = continuation
+            }
+        }
+
+        func complete(_ index: Int) {
+            if let continuation = continuations.removeValue(forKey: index) {
+                continuation.resume()
+            } else {
+                completed.insert(index)
+            }
+        }
+    }
+
+    private final class ControlledOutcomeExtractor: TransactionExtracting, @unchecked Sendable {
+        private let lock = NSLock()
+        private let outcomes: [TransactionRecognitionOutcome]
+        private let gate = CompletionGate()
+        private var calls = 0
+
+        init(_ outcomes: [TransactionRecognitionOutcome]) {
+            self.outcomes = outcomes
+        }
+
+        var name: String { "controlled-outcome" }
+
+        func recognizeTransaction(fromImageData data: Data) async -> TransactionRecognitionOutcome {
+            _ = data
+            let index = lock.withLock { () -> Int in
+                defer { calls += 1 }
+                return min(calls, outcomes.count - 1)
+            }
+            await gate.wait(for: index)
+            return outcomes[index]
+        }
+
+        func extractTransactionDraft(fromImageData data: Data) async throws -> TransactionDraft {
+            switch await recognizeTransaction(fromImageData: data) {
+            case .recognized(let draft): return draft
+            case .unsupported: throw AIRecognitionError.invalidResponse("暂不支持此类交易截图")
+            case .unreadable: throw AIRecognitionError.imageUnreadable
+            case .failure(let error): throw error
+            }
+        }
+
+        var callCount: Int { lock.withLock { calls } }
+
+        func complete(_ index: Int) async {
+            await gate.complete(index)
+        }
+    }
+
     private final class FailingConsentRepository: AIDataConsentRepository, @unchecked Sendable {
         var failOnUpsert = false
         private var stored: AIDataConsent?
@@ -253,6 +340,125 @@ struct ScreenshotBookkeepingViewModelTests {
         #expect(!viewModel.privacyAccepted)
         #expect(viewModel.step == .privacy)
         #expect(viewModel.formError != nil)
+    }
+
+    @Test("denied consent blocks recognizer review and metadata below UI")
+    func deniedConsentBlocksRecognition() async throws {
+        let extractor = FixedOutcomeExtractor(.recognized(MockAIProvider.sampleSuccessDraft()))
+        let (viewModel, container, _) = makeViewModel(extractor: extractor)
+        _ = try await seedAccount(container)
+        await viewModel.loadAccounts()
+
+        viewModel.setImageData(sampleImage)
+        await viewModel.startRecognitionAndWait()
+
+        #expect(extractor.callCount == 0)
+        #expect(viewModel.recognition == nil)
+        #expect(viewModel.step != .confirm)
+        #expect(try await container.aiRecognitionRecords.fetchAll(userId: userId).isEmpty)
+        #expect(try await container.mediaArtifacts.fetchAll(userId: userId).isEmpty)
+        #expect(try await container.transactions.fetchAll(userId: userId).isEmpty)
+    }
+
+    @Test("recognized outcome enters review without creating Transaction")
+    func recognizedOutcomeEntersReviewOnly() async throws {
+        let extractor = FixedOutcomeExtractor(.recognized(MockAIProvider.sampleSuccessDraft()))
+        let (viewModel, container, _) = makeViewModel(extractor: extractor)
+        _ = try await seedAccount(container)
+        await viewModel.loadAccounts()
+        await viewModel.acceptPrivacy()
+        viewModel.setImageData(sampleImage)
+        await viewModel.startRecognitionAndWait()
+
+        #expect(viewModel.step == .confirm)
+        #expect(viewModel.recognition != nil)
+        #expect(try await container.transactions.fetchAll(userId: userId).isEmpty)
+        #expect(try await container.confirmedImportProvenances.fetchAll(userId: userId).isEmpty)
+    }
+
+    @Test("unsupported outcome keeps a distinct user-facing reason")
+    func unsupportedOutcome() async throws {
+        let (viewModel, container, _) = makeViewModel(extractor: FixedOutcomeExtractor(.unsupported))
+        _ = try await seedAccount(container)
+        await viewModel.acceptPrivacy()
+        viewModel.setImageData(sampleImage)
+        await viewModel.startRecognitionAndWait()
+
+        guard case .failed(let message) = viewModel.step else {
+            Issue.record("Expected unsupported failure state")
+            return
+        }
+        #expect(message.contains("暂不支持"))
+        #expect(viewModel.recognition == nil)
+    }
+
+    @Test("unreadable outcome remains distinct from operational failure")
+    func unreadableOutcome() async throws {
+        let (viewModel, container, _) = makeViewModel(extractor: FixedOutcomeExtractor(.unreadable))
+        _ = try await seedAccount(container)
+        await viewModel.acceptPrivacy()
+        viewModel.setImageData(sampleImage)
+        await viewModel.startRecognitionAndWait()
+
+        guard case .failed(let message) = viewModel.step else {
+            Issue.record("Expected unreadable failure state")
+            return
+        }
+        #expect(message.contains("无法读取图片"))
+        #expect(!message.contains("暂不支持"))
+    }
+
+    @Test("operational failure keeps provider-safe failure reason")
+    func operationalFailureOutcome() async throws {
+        let extractor = FixedOutcomeExtractor(.failure(.requestFailed("本地识别故障")))
+        let (viewModel, container, _) = makeViewModel(extractor: extractor)
+        _ = try await seedAccount(container)
+        await viewModel.acceptPrivacy()
+        viewModel.setImageData(sampleImage)
+        await viewModel.startRecognitionAndWait()
+
+        guard case .failed(let message) = viewModel.step else {
+            Issue.record("Expected operational failure state")
+            return
+        }
+        #expect(message.contains("本地识别故障"))
+        #expect(!message.contains("暂不支持"))
+        #expect(!message.contains("无法读取图片"))
+    }
+
+    @Test("stale operational failure cannot replace newer accepted review")
+    func staleFailureIgnored() async throws {
+        let extractor = ControlledOutcomeExtractor([
+            .failure(.requestFailed("旧请求失败")),
+            .recognized(MockAIProvider.sampleSuccessDraft()),
+        ])
+        let (viewModel, container, _) = makeViewModel(extractor: extractor)
+        _ = try await seedAccount(container)
+        await viewModel.loadAccounts()
+        await viewModel.acceptPrivacy()
+        viewModel.setImageData(sampleImage)
+
+        viewModel.startRecognition()
+        for _ in 0..<40 where extractor.callCount < 1 {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        viewModel.startRecognition()
+        for _ in 0..<40 where extractor.callCount < 2 {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        await extractor.complete(1)
+        for _ in 0..<80 {
+            if case .confirm = viewModel.step { break }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        await extractor.complete(0)
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        #expect(viewModel.step == .confirm)
+        #expect(viewModel.recognition?.aiDraft.amount == Decimal(string: "36.50"))
+        #expect(try await container.aiRecognitionRecords.fetchAll(userId: userId).count == 1)
+        #expect(try await container.mediaArtifacts.fetchAll(userId: userId).count == 1)
     }
 
     @Test("concurrent confirm creates exactly one transaction")

@@ -22,6 +22,11 @@ public struct AppDependencies {
     public let secureTokens: any SecureTokenStoring
     public let session: AppSession
 
+    // Internal composition evidence for regression tests; no Provider implementation leaks into Domain contracts.
+    let transactionRecognizerMetadata: TransactionRecognizerMetadata
+    let debtScannerProviderName: String
+    let financialAssistingProviderName: String
+
     public init(
         repositories: RepositoryContainer,
         financialAssistingMode: FinancialAssistingMode = .mock,
@@ -56,6 +61,14 @@ public struct AppDependencies {
             secureTokens: secureTokens,
             gatewayTransport: gatewayTransport
         )
+        #if canImport(Vision)
+        let transactionExtractor: any TransactionExtracting = AppleVisionTransactionRecognizer()
+        #else
+        let transactionExtractor: any TransactionExtracting = mockAIProvider
+        #endif
+        self.transactionRecognizerMetadata = transactionExtractor.transactionRecognizerMetadata
+        self.debtScannerProviderName = mockAIProvider.name
+        self.financialAssistingProviderName = financialAssisting.name
         self.overviewServices = OverviewServiceContainer(
             repositories: repositories,
             financialAssisting: financialAssisting,
@@ -79,7 +92,7 @@ public struct AppDependencies {
         )
         self.transactionService = txService
         self.screenshotBookkeeping = ScreenshotBookkeepingService(
-            extractor: mockAIProvider,
+            extractor: transactionExtractor,
             transactionService: txService,
             accounts: repositories.accounts,
             transactions: repositories.transactions,
