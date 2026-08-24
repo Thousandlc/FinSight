@@ -39,7 +39,7 @@ struct ScreenshotBookkeepingViewModelTests {
         }
     }
 
-    private struct FailingConsentRepository: AIDataConsentRepository {
+    private final class FailingConsentRepository: AIDataConsentRepository, @unchecked Sendable {
         var failOnUpsert = false
         private var stored: AIDataConsent?
 
@@ -104,7 +104,7 @@ struct ScreenshotBookkeepingViewModelTests {
     ) -> (ScreenshotBookkeepingViewModel, RepositoryContainer, FailingConsentRepository) {
         let store = YoushuStore()
         let container = RepositoryContainer(store: store)
-        let session = AppSession()
+        let session = AppSession(users: container.users)
         session.configureForPreview(userId: userId)
         let consent = AIDataConsentService(consents: consentRepository)
         let media = MediaLifecycleService(

@@ -3,6 +3,7 @@ import Testing
 import YoushuAI
 import YoushuData
 import YoushuDomain
+import YoushuFoundation
 @testable import YoushuUI
 
 @Suite("Debt scanner view model reliability")
@@ -39,7 +40,7 @@ struct DebtScannerViewModelTests {
         }
     }
 
-    private struct FailingConsentRepository: AIDataConsentRepository {
+    private final class FailingConsentRepository: AIDataConsentRepository, @unchecked Sendable {
         var failOnUpsert = false
         private var stored: AIDataConsent?
 
@@ -114,7 +115,7 @@ struct DebtScannerViewModelTests {
     ) -> (DebtScannerViewModel, RepositoryContainer, FailingConsentRepository) {
         let store = YoushuStore()
         let container = RepositoryContainer(store: store)
-        let session = AppSession()
+        let session = AppSession(users: container.users)
         session.configureForPreview(userId: userId)
         let consent = AIDataConsentService(consents: consentRepository)
         let media = MediaLifecycleService(
@@ -309,7 +310,7 @@ struct DebtScannerViewModelTests {
             debtService: debtManager,
             consentService: consent
         )
-        let session = AppSession()
+        let session = AppSession(users: container.users)
         session.configureForPreview(userId: userId)
         let viewModel = DebtScannerViewModel(scanner: scannerService, session: session)
 
