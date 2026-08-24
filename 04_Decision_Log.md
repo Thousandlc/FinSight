@@ -2104,7 +2104,7 @@ No real Bailian production image-recognition smoke was performed. `MockAIProvide
 ## ADR-037 — Transaction Recognition v1 uses on-device pixel recognition with deterministic parsing and baseline-gated production eligibility
 
 **日期：2026-08-24**
-**状态：Accepted / Implemented — SHARED VERIFIED; APPLE VERIFICATION PENDING (Step 1 contracts)**
+**状态：Accepted / Implemented — VERIFIED 2026-08-24 (Step 1 contracts)**
 
 ### Context
 
@@ -2189,7 +2189,11 @@ Windows/shared targeted Transaction Recognition contract: 4 PASS; Failed 0
 Windows/shared targeted Recognition / ADR-036 regression: 70 PASS; Failed 0
 Windows/shared full gate: 750 PASS (107 suites); Failed 0
 swift build -c release: PASS
-Apple build/tests: NOT RUN in this step
+Apple: ios-apple-gate.yml run 32707622669
+       verified candidate bf75520bf7f71affcd73a04add48523a849510bf
+       Xcode 16.4 (16F6), macos-15-arm64 / macOS 15.7.7
+       YoushuUITests 58 PASS / YoushuDataTests 114 PASS / YoushuDomainTests 493 PASS
+       Total 665 PASS; Failed 0
 ```
 
 ---

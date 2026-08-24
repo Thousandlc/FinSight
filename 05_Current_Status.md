@@ -2,7 +2,7 @@
 
 > 文档角色：项目当前存档点 / 新 Chat 恢复入口  
 > 版本：v1.0
-> **Last Updated：2026-08-24（ADR-037 Step 1 shared verified; Apple verification pending）**
+> **Last Updated：2026-08-24（ADR-037 Step 1 — VERIFIED）**
 > 本文件应频繁更新；旧状态不应无限累积，重大历史移入 Decision Log。
 
 ---
@@ -93,7 +93,7 @@ Modules/Package.swift
 - 仓库 remote：`Thousandlc/FinSight`（private）
 - Apple-only integration gate：GitHub Actions `ios-apple-gate.yml`（`workflow_dispatch`, `macos-15`）
 - 历史 Apple Recognition Quality & Import Reliability / ADR-036 gate：**green**（run **32684027127**, HEAD `153a23d2d7dbfa570c063156932a646340f0f3f0`, Xcode **16.4 (16F6)**, macos-15-arm64 / macOS 15.7.7）— **不是 ADR-037 verification**
-- 当前 ADR-037 Step 1 candidate Apple gate：**NOT VERIFIED / PENDING**
+- 当前 ADR-037 Step 1 Apple gate：**VERIFIED**（run **32707622669**, verified candidate `bf75520bf7f71affcd73a04add48523a849510bf`, Xcode **16.4 (16F6)**, macos-15-arm64 / macOS 15.7.7）
 - 历史 Apple Production Observability gate：green（run **32555839840**, HEAD `385647b5c1d4959d449d182f66ec3845d7a548b2`, Xcode **16.4 (16F6)**）— **不再是当前基线**
 - 历史 Apple Privacy & AI Settings Closure gate：green（run **32470000762**, HEAD `b5a199cf87e12b3ebfcf1a2de2bf94e8f2329702`, Xcode **16.4**）— **不再是当前基线**
 - 历史 Apple Backup/Restore gate：green（run **32443787799**, HEAD `967c0c5`, Xcode **16.4**）— **不再是当前基线**
@@ -644,7 +644,7 @@ RemoteFinancialAIProvider
 
 ### 2026-08-24 ADR-037 Step 1 — 当前候选基线
 
-当前 shared 候选已验证；Apple gate 尚未在 ADR-037 精确候选上执行。旧 Apple 结果仅作历史证据。
+ADR-037 Step 1 shared 与 Apple gate 均已在对应精确候选上验证。
 
 **Windows gate**（`scripts/test-windows.bat` + `swift build -c release`）：
 
@@ -660,7 +660,7 @@ swift build -c release:
 PASS
 ```
 
-Candidate commit：**PENDING**（当前 working tree；提交后记录精确 HEAD）
+Verified candidate：`bf75520bf7f71affcd73a04add48523a849510bf`
 
 **Historical Apple ADR-036 gate**（GitHub Actions run **32684027127**, HEAD `153a23d2d7dbfa570c063156932a646340f0f3f0`, Xcode **16.4 (16F6)**）：
 
@@ -679,7 +679,17 @@ ScreenshotBookkeepingViewModelTests: 11 PASS
 DebtScannerViewModelTests:           11 PASS
 ```
 
-上述 Apple 665 不是 ADR-037 verification。ADR-037 Apple result：**NOT RUN / PENDING**。
+**ADR-037 Apple gate**（GitHub Actions run **32707622669**, verified candidate `bf75520bf7f71affcd73a04add48523a849510bf`, Xcode **16.4 (16F6)**, macos-15-arm64 / macOS 15.7.7）：
+
+```text
+YoushuUITests:       58 PASS
+YoushuDataTests:    114 PASS
+YoushuDomainTests:  493 PASS
+Total:              665 PASS
+Failed:               0
+```
+
+旧 run 32684027127 的 665 PASS 是 ADR-036 历史证据；本次相同计数来自 ADR-037 的独立 run 32707622669。
 
 **Gateway**（no Bailian production smoke）：
 
@@ -699,7 +709,7 @@ Recognition Evaluation Infrastructure:
 ESTABLISHED
 
 Recognition contract infrastructure:
-ADR-037 IMPLEMENTED — SHARED VERIFIED; APPLE VERIFICATION PENDING
+ADR-037 ACCEPTED / IMPLEMENTED — VERIFIED 2026-08-24
 
 Transaction single-image recognition outcomes:
 DEFINED (recognized / unsupported / unreadable / failure)
@@ -740,9 +750,9 @@ ACCEPTED / IMPLEMENTED — VERIFIED 2026-08-24
 | Schema v5 `ConfirmedImportProvenance` | **CLOSED** |
 | Transaction single-image outcomes | **DEFINED** (ADR-037) |
 | Debt per-image Provider partial outcomes | **INTENTIONALLY DEFERRED** |
-| ADR-037 candidate Apple gate | **NOT VERIFIED / PENDING** |
+| ADR-037 candidate Apple gate | **VERIFIED** (run 32707622669; candidate `bf75520…`) |
 
-Do not add Windows 750 and historical Apple 665 as unique tests.
+Do not add Windows 750 and Apple 665 as unique tests.
 
 ### 2026-08-22 Recognition Quality & Import Reliability — 历史中间基线
 
@@ -751,7 +761,7 @@ Do not add Windows 750 and historical Apple 665 as unique tests.
 ### 2026-08-22 Production Observability & Error Taxonomy — 历史基线（ADR-035 验证轮次）
 
 以下数字来自 **2026-08-22 Production Observability final verification**（Windows + Apple 两个 platform gates）。
-**当前 shared 候选为 Windows 750；ADR-037 Apple gate pending。** 历史 ADR-036 Apple 为 665。下列 610 / 537 仅为 ADR-035 验证轮次归档。
+**当前 ADR-037 候选为 Windows/shared 750 与 Apple 665（run 32707622669），两个 platform gates 不相加。** 下列 610 / 537 仅为 ADR-035 验证轮次归档。
 
 ```text
 Windows 610 and Apple 537 are separate platform gates.
@@ -1237,4 +1247,4 @@ domain / DNS
 
 ## 22. 当前一句话存档
 
-**截至 2026-08-24，FinSight ADR-037 Step 1 recognition contract infrastructure 已实现并完成 shared verification：Transaction single-image outcomes 为 `recognized / unsupported / unreadable / failure`；Windows/shared 当前候选 **750 PASS**（Foundation 30 / Domain 493 / Data 114 / AI 113，Failed 0），release build PASS。ADR-037 Apple gate 仍为 **NOT VERIFIED / PENDING**；历史 ADR-036 Apple gate 为 **665 PASS**（run 32684027127，HEAD `153a23d2d7dbfa570c063156932a646340f0f3f0`），不得误作本候选证据，也不得与 Windows 相加。Production Transaction recognizer 仍为 `MockAIProvider`；真实 pixel-reading recognizer、Apple Vision implementation 与真实 accuracy baseline 均 **NOT IMPLEMENTED / NOT ESTABLISHED**；Debt per-image Provider outcomes 仍 **DEFERRED**。ADR-036 provenance/currentness、schema v5、Backup v1、Consent 与 remote-image boundary 均未改变。**
+**截至 2026-08-24，FinSight ADR-037 Step 1 已完成：Transaction single-image outcomes 为 `recognized / unsupported / unreadable / failure`；Windows/shared **750 PASS**（Foundation 30 / Domain 493 / Data 114 / AI 113，Failed 0）且 release build PASS；Apple **665 PASS**（UI 58 / Data 114 / Domain 493，Failed 0；run 32707622669；verified candidate `bf75520bf7f71affcd73a04add48523a849510bf`；Xcode 16.4 / 16F6）。两个 platform gates 不相加。Production Transaction recognizer 仍为 `MockAIProvider`；真实 pixel-reading recognizer、Apple Vision implementation 与真实 accuracy baseline 均 **NOT IMPLEMENTED / NOT ESTABLISHED**；Debt per-image Provider outcomes 仍 **DEFERRED**。ADR-036 provenance/currentness、schema v5、Backup v1、Consent 与 remote-image boundary 均未改变。**

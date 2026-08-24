@@ -776,7 +776,7 @@ Production DebtScanning:          MockAIProvider
 Real pixel-reading recognition:   NOT IMPLEMENTED
 ```
 
-### Transaction Recognition v1 Contract（ADR-037 — IMPLEMENTED; APPLE VERIFICATION PENDING）
+### Transaction Recognition v1 Contract（ADR-037 — ACCEPTED / IMPLEMENTED / VERIFIED 2026-08-24）
 
 Transaction 单图 Application / Domain outcome 已定义：
 
