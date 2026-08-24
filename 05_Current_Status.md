@@ -2,7 +2,7 @@
 
 > 文档角色：项目当前存档点 / 新 Chat 恢复入口  
 > 版本：v1.0
-> **Last Updated：2026-08-24（ADR-037 Step 2 — VERIFIED）**
+> **Last Updated：2026-08-24（ADR-037 Step 3 — VERIFIED）**
 > 本文件应频繁更新；旧状态不应无限累积，重大历史移入 Decision Log。
 
 ---
@@ -94,7 +94,8 @@ Modules/Package.swift
 - Apple-only integration gate：GitHub Actions `ios-apple-gate.yml`（`workflow_dispatch`, `macos-15`）
 - 历史 Apple Recognition Quality & Import Reliability / ADR-036 gate：**green**（run **32684027127**, HEAD `153a23d2d7dbfa570c063156932a646340f0f3f0`, Xcode **16.4 (16F6)**, macos-15-arm64 / macOS 15.7.7）— **不是 ADR-037 verification**
 - 历史 ADR-037 Step 1 Apple gate：**VERIFIED**（run **32707622669**, verified candidate `bf75520bf7f71affcd73a04add48523a849510bf`, Xcode **16.4 (16F6)**）
-- 当前 ADR-037 Step 2 Apple gate：**VERIFIED**（run **32710172471**, verified candidate `9fc6bfad6e84c137638b5a458889489ea4851c8b`, Xcode **16.4 (16F6)**）
+- 历史 ADR-037 Step 2 Apple gate：**VERIFIED**（run **32710172471**, verified candidate `9fc6bfad6e84c137638b5a458889489ea4851c8b`, Xcode **16.4 (16F6)**）
+- 当前 ADR-037 Step 3 Apple gate：**VERIFIED**（run **32716260090**, verified candidate `67de996dc817ba9114479f613f0c83292f1e8240`, Xcode **16.4 (16F6)**）
 - 历史 Apple Production Observability gate：green（run **32555839840**, HEAD `385647b5c1d4959d449d182f66ec3845d7a548b2`, Xcode **16.4 (16F6)**）— **不再是当前基线**
 - 历史 Apple Privacy & AI Settings Closure gate：green（run **32470000762**, HEAD `b5a199cf87e12b3ebfcf1a2de2bf94e8f2329702`, Xcode **16.4**）— **不再是当前基线**
 - 历史 Apple Backup/Restore gate：green（run **32443787799**, HEAD `967c0c5`, Xcode **16.4**）— **不再是当前基线**
@@ -643,9 +644,9 @@ RemoteFinancialAIProvider
 
 ## 16. 测试状态
 
-### 2026-08-24 ADR-037 Step 2 — 当前候选基线
+### 2026-08-24 ADR-037 Step 3 — 当前候选基线
 
-ADR-037 Step 2 shared 与 Apple gate 均已在对应精确候选上验证。
+ADR-037 Step 3 shared 与 Apple gate 均已在对应精确候选上验证。
 
 **Windows gate**（`scripts/test-windows.bat` + `swift build -c release`）：
 
@@ -661,7 +662,7 @@ swift build -c release:
 PASS
 ```
 
-Verified candidate：`9fc6bfad6e84c137638b5a458889489ea4851c8b`
+Verified candidate：`67de996dc817ba9114479f613f0c83292f1e8240`
 
 **Historical Apple ADR-036 gate**（GitHub Actions run **32684027127**, HEAD `153a23d2d7dbfa570c063156932a646340f0f3f0`, Xcode **16.4 (16F6)**）：
 
@@ -680,17 +681,18 @@ ScreenshotBookkeepingViewModelTests: 11 PASS
 DebtScannerViewModelTests:           11 PASS
 ```
 
-**ADR-037 Step 2 Apple gate**（GitHub Actions run **32710172471**, verified candidate `9fc6bfad6e84c137638b5a458889489ea4851c8b`, Xcode **16.4 (16F6)**）：
+**ADR-037 Step 3 Apple gate**（GitHub Actions run **32716260090**, verified candidate `67de996dc817ba9114479f613f0c83292f1e8240`, Xcode **16.4 (16F6)**）：
 
 ```text
-YoushuUITests:       61 PASS
+YoushuUITests:       70 PASS
 YoushuDataTests:    114 PASS
 YoushuDomainTests:  493 PASS
-Total:              668 PASS
+Total:              677 PASS
 Failed:               0
 ```
 
-新增 Apple Vision focused tests 为 3 PASS，其中包含合成图片像素 OCR；旧 run 32707622669 的 665 PASS 是 ADR-037 Step 1 历史证据。
+Production composition 新增 3 PASS，其中包含 production dependency → Vision 像素读取 → 确定性 parser → editable review；
+新增 ViewModel lifecycle/outcome tests 6 PASS。旧 run 32710172471 的 668 PASS 是 ADR-037 Step 2 历史证据。
 
 **Gateway**（no Bailian production smoke）：
 
@@ -719,13 +721,16 @@ Real Recognition Accuracy Baseline:
 NOT ESTABLISHED
 
 Real Pixel-reading Recognizer:
-IMPLEMENTED (non-production Apple Vision Transaction recognizer)
+IMPLEMENTED (production-composed Apple Vision Transaction recognizer)
 
 Apple Vision implementation:
 IMPLEMENTED / APPLE VERIFIED
 
 Production image recognizer:
-MockAIProvider
+AppleVisionTransactionRecognizer (Transaction only)
+
+Production DebtScanning / FinancialAssisting:
+UNCHANGED (MockAIProvider / existing Mock-or-remote routing)
 
 MockAIProvider baselineEligible:
 false
@@ -741,8 +746,8 @@ ACCEPTED / IMPLEMENTED — VERIFIED 2026-08-24
 |-----------|--------|
 | Recognition Evaluation Infrastructure | **ESTABLISHED** |
 | Real recognition accuracy baseline | **NOT ESTABLISHED** (real corpus run and threshold decision remain open) |
-| Non-production pixel-reading recognizer | **IMPLEMENTED / APPLE VERIFIED** (`AppleVisionTransactionRecognizer`) |
-| Production pixel-reading recognizer | **NOT INTEGRATED** (`MockAIProvider` remains production) |
+| Transaction pixel-reading recognizer | **IMPLEMENTED / PRODUCTION COMPOSITION WIRED / APPLE VERIFIED** (`AppleVisionTransactionRecognizer`) |
+| Production Debt recognizer | **UNCHANGED** (`MockAIProvider`) |
 | Transaction same-flow import reliability | **CLOSED** |
 | Debt same-flow lifecycle/confirmation reliability | **CLOSED** |
 | Cross-session exact-source provenance | **CLOSED** (ADR-036 implemented) |
@@ -752,9 +757,9 @@ ACCEPTED / IMPLEMENTED — VERIFIED 2026-08-24
 | Schema v5 `ConfirmedImportProvenance` | **CLOSED** |
 | Transaction single-image outcomes | **DEFINED** (ADR-037) |
 | Debt per-image Provider partial outcomes | **INTENTIONALLY DEFERRED** |
-| ADR-037 Step 2 candidate Apple gate | **VERIFIED** (run 32710172471; candidate `9fc6bfa…`) |
+| ADR-037 Step 3 candidate Apple gate | **VERIFIED** (run 32716260090; candidate `67de996…`) |
 
-Do not add Windows 771 and Apple 668 as unique tests.
+Do not add Windows 771 and Apple 677 as unique tests.
 
 ### 2026-08-22 Recognition Quality & Import Reliability — 历史中间基线
 
@@ -763,7 +768,7 @@ Do not add Windows 771 and Apple 668 as unique tests.
 ### 2026-08-22 Production Observability & Error Taxonomy — 历史基线（ADR-035 验证轮次）
 
 以下数字来自 **2026-08-22 Production Observability final verification**（Windows + Apple 两个 platform gates）。
-**当前 ADR-037 Step 2 候选为 Windows/shared 771 与 Apple 668（run 32710172471），两个 platform gates 不相加。** 下列 610 / 537 仅为 ADR-035 验证轮次归档。
+**当前 ADR-037 Step 3 候选为 Windows/shared 771 与 Apple 677（run 32716260090），两个 platform gates 不相加。** 下列 610 / 537 仅为 ADR-035 验证轮次归档。
 
 ```text
 Windows 610 and Apple 537 are separate platform gates.
@@ -1071,7 +1076,7 @@ Trust 与 Freshness / Consent 是 **三个独立维度**（见 §18.2）。
 8. **remote production log aggregation / dashboards not implemented**
 9. **cost telemetry absent**（token usage 仅 Gateway 在 Bailian 实际返回时记录；无价格表 / 估算成本）
 10. **真实图片识别准确率缺少稳定 baseline**
-    - non-production real pixel-reading recognizer 已存在；仍需 privacy-safe real corpus run 与 threshold decision
+    - production Transaction path 已使用 real pixel-reading recognizer；仍需 privacy-safe real corpus run 与 threshold decision
     - `MockAIProvider` **baselineEligible = false**
     - `AppleVisionTransactionRecognizer` **baselineEligible = true**，但这不表示 production ready
 11. **大数据量 JSON Store 性能未压测**
@@ -1105,7 +1110,6 @@ CLOSED：
 
 **Not closed (intentional post-milestone):**
 
-- Real pixel-reading Recognition Provider production integration
 - Real Recognition Accuracy Baseline
 - Debt per-image Provider outcome semantics
 - Debt field-level reconciliation / merge policy
@@ -1250,4 +1254,4 @@ domain / DNS
 
 ## 22. 当前一句话存档
 
-**截至 2026-08-24，FinSight ADR-037 Step 2 已完成：非 production `AppleVisionTransactionRecognizer` 已通过真实 Apple Vision 合成图片像素 OCR 验证，并以确定性 WeChat Pay / Alipay v1 parser 输出可审核 `TransactionDraft`；Windows/shared **771 PASS**（Foundation 30 / Domain 493 / Data 114 / AI 134，Failed 0）且 release build PASS；Apple **668 PASS**（UI 61 / Data 114 / Domain 493，Failed 0；run 32710172471；verified candidate `9fc6bfad6e84c137638b5a458889489ea4851c8b`；Xcode 16.4 / 16F6）。两个 platform gates 不相加。Production Transaction recognizer 仍为 `MockAIProvider`，真实 accuracy baseline 仍 **NOT ESTABLISHED**，Debt per-image Provider outcomes 仍 **DEFERRED**。ADR-036 provenance/currentness、schema v5、Backup v1、Consent 与 remote-image boundary 均未改变。**
+**截至 2026-08-24，FinSight ADR-037 Step 3 已完成：production `TransactionExtracting` 已仅切换为本地 `AppleVisionTransactionRecognizer`，真实 Apple Vision 合成图片像素 OCR 经 production composition 输出可审核 `TransactionDraft`；Windows/shared **771 PASS**（Foundation 30 / Domain 493 / Data 114 / AI 134，Failed 0）且 release build PASS；Apple **677 PASS**（UI 70 / Data 114 / Domain 493，Failed 0；run 32716260090；verified candidate `67de996dc817ba9114479f613f0c83292f1e8240`；Xcode 16.4 / 16F6）。两个 platform gates 不相加。DebtScanning 与 FinancialAssisting 未切换，真实 accuracy baseline 仍 **NOT ESTABLISHED**，Debt per-image Provider outcomes 仍 **DEFERRED**。ADR-036 provenance/currentness、schema v5、Backup v1、Consent 与 remote-image boundary 均未改变。**

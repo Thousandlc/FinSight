@@ -1846,10 +1846,12 @@ Recognition Quality & Import Reliability Steps 1–4A closed **same-flow** impor
 - Debt cross-session exact-scan provenance is **not safely representable**.
 - `MediaArtifact` / `AIRecognitionRecord` are workflow/audit metadata, **not** durable confirmed-import provenance.
 - Current `sourceImageId` / `MediaLifecyclePolicy.makeImageId` is a **non-cryptographic media lifecycle identifier** and must **not** become authoritative exact-input identity.
-- True per-image Provider outcome semantics cannot be frozen while production still uses `MockAIProvider` (no pixel-reading recognizer).
+- True Debt per-image Provider outcome semantics cannot be frozen while production Debt scanning still uses
+  `MockAIProvider` (no Debt pixel-reading recognizer).
 - Stale/cancelled recognition may still write durable metadata **before** Application operation-currentness acceptance.
 
-Production image recognition remains `MockAIProvider`. Real recognition accuracy baseline is **NOT ESTABLISHED**.
+At ADR-036 verification, production image recognition remained `MockAIProvider`. ADR-037 Step 3 later supersedes
+that runtime statement for Transaction recognition only; the real accuracy baseline remains **NOT ESTABLISHED**.
 
 ### Decision
 
@@ -2055,7 +2057,8 @@ do NOT roll back financial fact to simulate atomicity
 **Still unchanged / still deferred:**
 
 - Per-image Provider outcome semantics (RQ-06) remain **DEFERRED**.
-- Production image recognition remains `MockAIProvider`.
+- At ADR-036 verification, production image recognition remained `MockAIProvider`; ADR-037 Step 3 later switches
+  Transaction recognition only, while Debt scanning remains Mock.
 - Real recognition accuracy baseline remains **NOT ESTABLISHED**.
 - Debt field-level reconciliation / semantic Transaction duplicate detection / Backup v2 portable provenance remain **not decided by this ADR**.
 
@@ -2104,11 +2107,11 @@ No real Bailian production image-recognition smoke was performed. `MockAIProvide
 ## ADR-037 — Transaction Recognition v1 uses on-device pixel recognition with deterministic parsing and baseline-gated production eligibility
 
 **日期：2026-08-24**
-**状态：Accepted / Implemented — VERIFIED 2026-08-24 (Steps 1–2)**
+**状态：Accepted / Implemented — VERIFIED 2026-08-24 (Steps 1–3)**
 
 ### Context
 
-Production `TransactionExtracting` still uses `MockAIProvider`; it does not read image pixels and no real
+At ADR start, production `TransactionExtracting` used `MockAIProvider`; it did not read image pixels and no real
 Transaction-recognition accuracy baseline exists. The shared contract previously returned only a
 `TransactionDraft` or an error, so it could not distinguish a supported review draft from a readable but
 unsupported layout, unreadable input, or an operational failure.
@@ -2176,11 +2179,20 @@ a real accuracy baseline.
 - OCR text is not persisted, logged, backed up, or sent remotely. Schema v5, Backup v1, Consent, ADR-036 currentness,
   metadata ordering, confirmation, and provenance remain unchanged.
 
+### Step 3 production integration
+
+- Production screenshot bookkeeping now injects `AppleVisionTransactionRecognizer` only for `TransactionExtracting`.
+- `DebtScanning` remains `MockAIProvider`; `FinancialAssisting` retains its existing Mock/remote routing.
+- Canonical `AIDataConsentService`, exact-source lookup, Application generation/currentness acceptance, editable
+  review, confirmation, Transaction-first provenance ordering, and media-retention policy remain unchanged.
+- The production-composed Apple test proves image pixels reach Vision and a deterministic review draft is produced
+  without auto-confirming a Transaction. No screenshot or OCR text is sent remotely or persisted as metadata.
+- This production switch does not establish an accuracy baseline or pass an accuracy/release gate.
+
 ### Deferred
 
 - additional unsupported WeChat / Alipay historical layouts beyond conservative v1 rules
 - real accuracy run and threshold decision
-- production provider switch
 - remote Qwen/VL recognizer or Gateway image endpoint
 - Debt recognition, Debt per-image outcomes, and Debt reconciliation
 - semantic Transaction duplicate detection
@@ -2196,6 +2208,10 @@ field, Backup v1 change, or JSON Store schema change.
 
 Step 2 adds the non-production local Apple OCR/parser composition only. It introduces no production Provider switch,
 remote image transmission, Consent field, Backup v1 change, or JSON Store schema change.
+
+Step 3 switches only production `TransactionExtracting` to the local Apple recognizer. It introduces no Debt or
+Financial Assistant provider switch, remote image transmission, Consent field, Backup v1 change, or JSON Store
+schema change.
 
 ### Verification
 
@@ -2222,6 +2238,15 @@ Step 2 Apple: ios-apple-gate.yml run 32710172471
        YoushuUITests 61 PASS / YoushuDataTests 114 PASS / YoushuDomainTests 493 PASS
        Total 668 PASS; Failed 0
        Apple Vision focused tests 3 PASS (including synthetic pixel OCR)
+
+Step 3 Windows/shared full gate: 771 PASS (108 suites); Failed 0
+Step 3 swift build -c release: PASS
+Step 3 Apple: ios-apple-gate.yml run 32716260090
+       verified candidate 67de996dc817ba9114479f613f0c83292f1e8240
+       Xcode 16.4 (16F6)
+       YoushuUITests 70 PASS / YoushuDataTests 114 PASS / YoushuDomainTests 493 PASS
+       Total 677 PASS; Failed 0
+       Production composition 3 PASS, including production-composed synthetic pixel OCR to editable review
 ```
 
 ---
