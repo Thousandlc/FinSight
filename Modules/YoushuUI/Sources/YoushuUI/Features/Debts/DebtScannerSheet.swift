@@ -79,7 +79,7 @@ public struct DebtScannerSheet: View {
                 }
             }
             Spacer()
-            YSButton(isAcceptingIntro ? "保存授权中…" : "开始扫描我的债务", isLoading: viewModel.isAcceptingIntro) {
+            YSButton(viewModel.isAcceptingIntro ? "保存授权中…" : "开始扫描我的债务", isLoading: viewModel.isAcceptingIntro) {
                 Task { await viewModel.acceptIntro() }
             }
         }

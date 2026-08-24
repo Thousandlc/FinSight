@@ -74,7 +74,7 @@ public struct ScreenshotBookkeepingSheet: View {
                 }
             }
             Spacer()
-            YSButton(isAcceptingPrivacy ? "保存授权中…" : "我已了解，继续", isLoading: viewModel.isAcceptingPrivacy) {
+            YSButton(viewModel.isAcceptingPrivacy ? "保存授权中…" : "我已了解，继续", isLoading: viewModel.isAcceptingPrivacy) {
                 Task { await viewModel.acceptPrivacy() }
             }
         }
