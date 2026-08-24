@@ -174,6 +174,7 @@ struct DebtScannerViewModelTests {
         await viewModel.acceptIntro()
         viewModel.setImageDatas([sampleImage])
         viewModel.startScan()
+        try await Task.sleep(nanoseconds: 10_000_000)
         viewModel.retryFromPick()
         viewModel.setImageDatas([sampleImage])
         viewModel.startScan()
@@ -223,6 +224,7 @@ struct DebtScannerViewModelTests {
         await viewModel.acceptIntro()
         viewModel.setImageDatas([sampleImage])
         viewModel.startScan()
+        try await Task.sleep(nanoseconds: 10_000_000)
         viewModel.startScan()
 
         for _ in 0..<80 {

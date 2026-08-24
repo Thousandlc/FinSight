@@ -161,6 +161,7 @@ struct ScreenshotBookkeepingViewModelTests {
 
         viewModel.setImageData(sampleImage)
         viewModel.startRecognition()
+        try await Task.sleep(nanoseconds: 10_000_000)
         viewModel.retryFromPick()
         viewModel.setImageData(sampleImage)
         viewModel.startRecognition()
@@ -214,6 +215,7 @@ struct ScreenshotBookkeepingViewModelTests {
 
         viewModel.setImageData(sampleImage)
         viewModel.startRecognition()
+        try await Task.sleep(nanoseconds: 10_000_000)
         viewModel.startRecognition()
 
         for _ in 0..<80 {

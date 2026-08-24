@@ -13,6 +13,7 @@ struct DebtMoneyPresentationTests {
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
         formatter.groupingSeparator = ","
+        formatter.usesGroupingSeparator = true
         let amountString = formatter.string(from: money.amount as NSDecimalNumber) ?? "\(money.amount)"
         return "¥\(amountString)"
     }
