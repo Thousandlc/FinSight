@@ -66,6 +66,25 @@ struct TransactionRecognitionContractTests {
         #expect(metadata.baselineEligible == false)
     }
 
+    @Test("pixel claim alone cannot make an unidentified or mock recognizer baseline eligible")
+    func eligibilityRequiresReproducibleRealMetadata() {
+        #expect(TransactionRecognizerMetadata(
+            providerID: "real-local",
+            engineVersion: nil,
+            inspectsImagePixels: true
+        ).baselineEligible == false)
+        #expect(TransactionRecognizerMetadata(
+            providerID: "mock",
+            engineVersion: "pixel-claim-v1",
+            inspectsImagePixels: true
+        ).baselineEligible == false)
+        #expect(TransactionRecognizerMetadata(
+            providerID: "real-local",
+            engineVersion: "engine-v1",
+            inspectsImagePixels: true
+        ).baselineEligible == true)
+    }
+
     @Test("recognized text and parser boundary are platform-neutral")
     func platformNeutralParserBoundary() {
         let span = RecognizedTextSpan(text: "¥36.50", confidence: 1.4)

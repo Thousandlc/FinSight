@@ -29,7 +29,14 @@ public struct TransactionRecognizerMetadata: Sendable, Hashable, Equatable {
         self.inspectsImagePixels = inspectsImagePixels
     }
 
-    public var baselineEligible: Bool { inspectsImagePixels }
+    public var baselineEligible: Bool {
+        let identity = providerID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let version = engineVersion?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return inspectsImagePixels
+            && !identity.isEmpty
+            && identity.localizedCaseInsensitiveCompare("mock") != .orderedSame
+            && !version.isEmpty
+    }
 }
 
 /// Single-image Transaction recognition outcome. A recognized draft is reviewable, not authoritative.
