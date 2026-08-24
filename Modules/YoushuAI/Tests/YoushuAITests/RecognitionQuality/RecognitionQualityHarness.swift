@@ -57,6 +57,16 @@ enum RecognitionQualityHarness {
         baselineEligible: Bool,
         baselineIneligibilityReasons: [String]
     ) async -> RecognitionQualityReportV1 {
+        var effectiveEligible = baselineEligible
+        var effectiveReasons = baselineIneligibilityReasons
+        if let transactionExtractor,
+           corpus.fixtures.contains(where: { $0.capability == .transactionScreenshot }),
+           !transactionExtractor.transactionRecognizerMetadata.baselineEligible {
+            effectiveEligible = false
+            for reason in RecognitionQualityBaseline.nonPixelReasons where !effectiveReasons.contains(reason) {
+                effectiveReasons.append(reason)
+            }
+        }
         var runs: [(String, RecognitionFixtureRun)] = []
         let fixtures = corpus.fixtures.sorted { $0.id < $1.id }
         for fixture in fixtures {
@@ -71,8 +81,8 @@ enum RecognitionQualityHarness {
         return RecognitionQualityReportBuilder.build(
             corpus: corpus,
             recognizerLabel: recognizerLabel,
-            baselineEligible: baselineEligible,
-            baselineIneligibilityReasons: baselineIneligibilityReasons,
+            baselineEligible: effectiveEligible,
+            baselineIneligibilityReasons: effectiveReasons,
             runs: runs
         )
     }
@@ -93,8 +103,16 @@ enum RecognitionQualityHarness {
                     corpusDirectory: corpusDirectory,
                     relativePath: fixture.assets[0]
                 )
-                let draft = try await transactionExtractor.extractTransactionDraft(fromImageData: data)
-                return .observation(.transaction(RecognitionQualityAdapters.observation(from: draft)))
+                switch await transactionExtractor.recognizeTransaction(fromImageData: data) {
+                case .recognized(let draft):
+                    return .observation(.transaction(RecognitionQualityAdapters.observation(from: draft)))
+                case .unsupported:
+                    return .operationFailure(code: "unsupported")
+                case .unreadable:
+                    return .operationFailure(code: "unreadable")
+                case .failure(let error):
+                    return .operationFailure(code: RecognitionQualityAdapters.operationFailureCode(error))
+                }
             case .debtScreenshot:
                 guard let debtScanner else {
                     return .operationFailure(code: "missingDebtScanner")

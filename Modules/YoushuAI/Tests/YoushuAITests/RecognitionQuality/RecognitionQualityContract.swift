@@ -258,4 +258,5 @@ enum RecognitionQualityCorpusError: Error, Equatable, Sendable {
 
 enum RecognitionQualityBaseline {
     static let mockReasons = ["mockRecognizer", "recognizerDoesNotInspectPixels"]
+    static let nonPixelReasons = ["recognizerDoesNotInspectPixels"]
 }

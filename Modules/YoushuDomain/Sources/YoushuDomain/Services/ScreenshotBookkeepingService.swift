@@ -90,16 +90,17 @@ public struct ScreenshotBookkeepingService: Sendable {
             _ = try await consentService.requireScreenshotImage(userId: userId)
         }
 
-        let draft: TransactionDraft
-        do {
-            draft = try await extractor.extractTransactionDraft(fromImageData: imageData)
-        } catch let error as AIRecognitionError {
-            throw error
-        } catch let error as PrivacyError {
-            throw error
-        } catch {
-            throw AIRecognitionError.requestFailed(PrivacySafeErrorMapper.userMessage(for: error))
-        }
+        let draft: TransactionDraft
+        switch await extractor.recognizeTransaction(fromImageData: imageData) {
+        case .recognized(let recognizedDraft):
+            draft = recognizedDraft
+        case .unsupported:
+            throw AIRecognitionError.invalidResponse("暂不支持此类交易截图")
+        case .unreadable:
+            throw AIRecognitionError.imageUnreadable
+        case .failure(let error):
+            throw error
+        }
 
         let warnings = try TransactionDraftValidator.validateRecognition(draft)
         return PendingScreenshotRecognition(
@@ -257,5 +258,4 @@ public struct ScreenshotBookkeepingService: Sendable {
             fallback: list.first?.id
         )
     }
-}
-
+}

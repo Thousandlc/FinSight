@@ -72,8 +72,16 @@ public struct FinancialAssistingRouter: FinancialAssisting {
 }
 
 extension FinancialAssistingRouter: TransactionExtracting {
+    public var transactionRecognizerMetadata: TransactionRecognizerMetadata {
+        mock.transactionRecognizerMetadata
+    }
+
     public func extractTransactionDraft(fromImageData data: Data) async throws -> TransactionDraft {
         try await mock.extractTransactionDraft(fromImageData: data)
+    }
+
+    public func recognizeTransaction(fromImageData data: Data) async -> TransactionRecognitionOutcome {
+        await mock.recognizeTransaction(fromImageData: data)
     }
 }
 

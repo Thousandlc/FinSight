@@ -2,7 +2,7 @@
 
 > 文档角色：系统架构长期真相源  
 > 版本：v1.0  
-> 更新日期：2026-08-22  
+> 更新日期：2026-08-24
 > 状态：Active  
 > 原则：本文记录“当前确认架构 + 已确定的演进方向”，不把聊天中的临时建议视作实现事实。
 
@@ -691,24 +691,30 @@ Provider
 
 撤销授权后，新请求必须遵守最新状态。
 
-### Target Import Provenance Architecture（ADR-036 — ACCEPTED / NOT YET IMPLEMENTED）
+### Import Provenance Architecture（ADR-036 — ACCEPTED / IMPLEMENTED — VERIFIED 2026-08-24）
 
-> **Status:** Accepted architecture target only. **Not implemented** in production code, JSON Store, Backup v1, or UI as of 2026-08-22. Current image recognition path still uses **`MockAIProvider`**.
+> **Status:** Implemented and verified on candidate `153a23d2d7dbfa570c063156932a646340f0f3f0`. Production image recognition path still uses **`MockAIProvider`**. Real pixel-reading recognition remains **NOT IMPLEMENTED**. Recognition Quality harness ≠ OCR quality.
 
-**Target flow:**
+**Implemented flow:**
 
 ```text
 Input bytes
         ↓
 Local full-file SHA-256 fingerprint(s)
         ↓
-Recognition (current port: TransactionExtracting / DebtScanning batch)
+Exact-source provenance lookup
         ↓
-Unpersisted recognition result
+Recognition Provider (current port: TransactionExtracting / DebtScanning batch)
+        ↓
+Transient / unpersisted recognition result
         ↓
 Application operation-currentness gate (generation / cancel-and-replace)
-        ├─ stale / cancelled → discard in memory; no durable recognition metadata
-        └─ current → active review lifecycle
+        ├─ stale / cancelled before Application acceptance
+        │     → discard in memory
+        │     → no durable MediaArtifact
+        │     → no AIRecognitionRecord
+        │     → no retained binary
+        └─ current → Application acceptance → eligible recognition/media metadata persist
         ↓
 User review / edit
         ↓
@@ -716,10 +722,44 @@ User confirmation
         ↓
 Authoritative financial fact persist (Transaction / Debt)
         ↓
-ConfirmedImportProvenance (local durable; excluded from Backup v1)
+ConfirmedImportProvenance upsert (local durable; excluded from Backup v1)
 ```
 
-**Key boundaries (target — not current runtime):**
+Provenance write failure after financial persist is a **secondary / degraded** outcome: the financial fact remains authoritative.
+
+**Transaction exact-source semantics (implemented):**
+
+```text
+exact previously-confirmed screenshot
+→ local provenance match
+→ warning before recognition
+→ view existing Transaction(s)
+→ explicit user override may continue
+```
+
+```text
+exact-source match  !=  semantic financial duplicate
+```
+
+No merchant / amount / date heuristic exists.
+
+**Debt exact-batch semantics (implemented):**
+
+```text
+exact previously-confirmed Debt scan batch
+→ prior-scan / reconciliation signal
+→ related Debts may be surfaced
+→ explicit user continuation allowed
+```
+
+```text
+prior scan              != automatic duplicate Debt
+batch-level provenance  != image→Debt causality
+```
+
+No automatic field-level merge.
+
+**Key boundaries (current runtime):**
 
 | Concept | Role |
 |---------|------|
@@ -728,21 +768,71 @@ ConfirmedImportProvenance (local durable; excluded from Backup v1)
 | `MediaArtifact` | Media lifecycle / retention; **not** provenance authority |
 | `sourceImageId` | Media lifecycle id; **not** cryptographic exact-input fingerprint |
 
-**Explicitly deferred (ADR-036):**
+**Production Provider reality (unchanged):**
 
-- Per-image Provider outcome taxonomy until a **real pixel-reading recognizer** exists
-- Debt field-level reconciliation/merge rules
-- Portable provenance across Backup v1 restore (requires future Backup v2 / ADR)
-- One-call-per-document Debt scanning as default architecture
+```text
+Production TransactionExtracting: MockAIProvider
+Production DebtScanning:          MockAIProvider
+Real pixel-reading recognition:   NOT IMPLEMENTED
+```
 
-**Current implemented contract (unchanged until later implementation steps):**
+### Transaction Recognition v1 Contract（ADR-037 — IMPLEMENTED; APPLE VERIFICATION PENDING）
+
+Transaction 单图 Application / Domain outcome 已定义：
+
+```text
+recognized
+unsupported
+unreadable
+failure
+```
+
+`recognized` 仅表示得到可审核的 `TransactionDraft`，不表示 Transaction 已持久化、用户已确认、
+字段已全部正确或 provenance 已写入。金额等关键字段仍由 Recognition Quality harness 独立评测。
+
+未来 Apple 实现必须保持以下依赖方向：
+
+```text
+on-device pixel recognizer (future Apple Vision adapter; Infrastructure-only)
+→ platform-neutral RecognizedTextSpan
+→ deterministic TransactionRecognizedTextParsing
+→ TransactionRecognitionOutcome / reviewable TransactionDraft
+→ existing Application currentness gate
+→ user review and confirmation
+→ authoritative Transaction persist
+→ ConfirmedImportProvenance
+```
+
+Apple Vision framework types 不得进入 shared Domain / Application contract。确定性 parser 不得调用远程
+LLM / Gateway、持久化 Transaction、写 provenance 或绕过用户确认。Raw OCR text 默认仅为 transient data；
+不进入 Store、Backup v1、observability 或 AI financial-context DTO。
+
+```text
+Recognition Result != Transaction
+```
+
+Apple Vision implementation 与真实 pixel-reading Transaction recognizer 仍为 **NOT IMPLEMENTED**；production
+`TransactionExtracting` 仍为 `MockAIProvider`。ADR-036 exact-source provenance、currentness 与写入顺序不变。
+
+**Current batch abstraction (unchanged):**
 
 ```text
 DebtScanning.scanDebts(from: [BillDocument]) → [DebtCandidate]
-ScreenshotBookkeeping: recognize → confirm → Transaction
 ```
 
-Same-flow reliability (Steps 3–4A) is closed; cross-session exact-source provenance and stale metadata write-after-acceptance are **implementation pending**.
+```text
+Transaction single-image Application / Domain outcomes: DEFINED — ADR-037
+Debt per-image Provider outcomes: DEFERRED UNTIL REAL DEBT PIXEL-READING PROVIDER
+Provider-specific finer-grained recognition taxonomy: NOT FROZEN BY ADR-037
+```
+
+**Explicitly deferred (ADR-036):**
+
+- Debt per-image Provider outcome taxonomy until a **real Debt pixel-reading recognizer** exists
+- Debt field-level reconciliation/merge rules
+- Semantic Transaction duplicate detection
+- Portable provenance across Backup v1 restore (requires future Backup v2 / ADR)
+- One-call-per-document Debt scanning as default architecture
 
 ### Production Consent Wiring（Step 5A — 2026-08-20）
 
@@ -849,13 +939,13 @@ Monotonic privacy semantics：once sensitive data is successfully deleted, it is
 
 ```text
 JSON Document Store
-schema v4
+schema v5
 ```
 
 支持历史：
 
 ```text
-v1 → v4 migration
+v1 → v5 migration
 ```
 
 `FinancialInsight.freshnessMetadata` 为 **optional** 字段。legacy JSON 记录缺少该字段时安全 decode 为 nil。**ADR-032 不需要 schema migration。**
@@ -876,7 +966,7 @@ Backup / Restore v1 **不迁移、不重命名** live store path。ADR-022 仍�
 4. 成功后再切换。
 5. 保留 rollback / recovery 策略。
 
-**ADR-034 不改变 JSON Store schema v4 或 live store path。**
+**ADR-034 不改变 live store path。** Live schema 后经 ADR-036 升至 **v5**；wipe 仍级联移除当前用户 provenance。
 
 ### 15.2 App-private retained original-image storage
 
@@ -939,8 +1029,8 @@ ApplicationRestoreRefresh（session + ViewModels + presentation subtree）
 - Restore = **FULL REPLACE**（非 merge）
 - External file remains untrusted until full validation + transactional commit
 - Same encrypted bytes preflight → commit；URL 不在 preview 后重读
-- Excluded from backup/restore carry-forward：`FinancialInsight`, `AIDataConsent`, `AIRecognitionRecord`, `MediaArtifact`, `PendingDebtLink`, `SuspectedDebt`；restore 后 `debtImportInProgress = false`；AI consent → deniedDefault
-- **`ConfirmedImportProvenance`（ADR-036 target）亦排除于 Backup v1** — 即使未来在 live JSON Store 落地，Backup v1 payload **不变**
+- Excluded from backup/restore carry-forward：`FinancialInsight`, `AIDataConsent`, `AIRecognitionRecord`, `MediaArtifact`, `PendingDebtLink`, `SuspectedDebt`, **`ConfirmedImportProvenance`（ADR-036）**；restore 后 `debtImportInProgress = false`；AI consent → deniedDefault
+- Restore 后 provenance **重置为空**（intentional Backup v1 行为）
 - Derived read models（Summary / CashFlow / Risk / HomeOverview 等）restore 后重算，不是 backup facts
 
 ### 15.4 Remaining persistence gaps

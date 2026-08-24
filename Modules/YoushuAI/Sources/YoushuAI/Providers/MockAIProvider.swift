@@ -5,6 +5,11 @@ import YoushuFoundation
 /// 可配置的 Mock AI。Unit Test 与本地预览使用；不依赖真实 API。
 public struct MockAIProvider: TransactionExtracting, DebtScanning, InsightExplaining, FinancialAssisting {
     public let name = "mock"
+    public let transactionRecognizerMetadata = TransactionRecognizerMetadata(
+        providerID: "mock",
+        engineVersion: "fixture-v1",
+        inspectsImagePixels: false
+    )
 
     public enum Behavior: Sendable, Equatable {
         case success
@@ -109,6 +114,18 @@ public struct MockAIProvider: TransactionExtracting, DebtScanning, InsightExplai
             throw AIRecognitionError.networkTimeout
         case .custom(let draft):
             return draft
+        }
+    }
+
+    public func recognizeTransaction(fromImageData data: Data) async -> TransactionRecognitionOutcome {
+        do {
+            return .recognized(try await extractTransactionDraft(fromImageData: data))
+        } catch AIRecognitionError.imageUnreadable {
+            return .unreadable
+        } catch let error as AIRecognitionError {
+            return .failure(error)
+        } catch {
+            return .failure(.requestFailed("模拟识别失败"))
         }
     }
 

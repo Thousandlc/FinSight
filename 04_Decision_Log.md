@@ -2,7 +2,7 @@
 
 > 文档角色：架构 / 产品重大决策记录（ADR Index）  
 > 版本：v1.0  
-> 更新日期：2026-08-22  
+> 更新日期：2026-08-24
 > 使用方式：以后任何与下列结论冲突的修改，都应先新增 ADR 说明“为什么改变”，而不是静默回退。
 
 ---
@@ -440,9 +440,9 @@ AI outage 不得阻断：
 
 ### 决策
 
-当前使用 JSON Document Store（已知 schema v4）。
+当前使用 JSON Document Store（live schema 以代码 `YoushuSnapshot.currentSchemaVersion` 为准）。
 
-SwiftData 尚未作为当前事实存储实现。
+**更新（2026-08-24）：** live JSON Store 现为 **schema v5**（ADR-036 新增 `confirmedImportProvenances`；v4 → v5 默认空数组，既有财务事实保持不变）。SwiftData 尚未作为当前事实存储实现。
 
 ### 代价
 
@@ -901,11 +901,13 @@ Proactive historical insights **不纳入** ADR-032 的 Home monthly-summary fre
 
 #### G. Compatibility
 
-JSON Store 继续保持 **schema v4**。
+JSON Store 在本 ADR 接受时保持 **schema v4**。
 
 因为 `freshnessMetadata` 是 optional，legacy records 缺少字段时可以安全 decode 为 nil。
 
 **本次不需要 schema migration。**
+
+**更新（2026-08-24）：** live store 后经 ADR-036 升至 schema v5（provenance collection）；ADR-032 的 optional freshness 语义不变。
 
 #### H. Production Consent Wiring Invariant
 
@@ -1037,6 +1039,8 @@ User.debtImportInProgress = false
 - restore **不** 触发 remote AI generation
 
 这是 **intentional privacy/trust lifecycle behavior**，不是 data loss bug。
+
+**更新（2026-08-24 / ADR-036）：** live store 新增的 `ConfirmedImportProvenance` **同样排除于 Backup v1**。这是后续 ADR-036 对 Backup v1 exclusion 合同的延伸，**不是** 回溯改写 ADR-033 原接受范围。Restore 后 provenance 重置为空；财务事实仍按 Backup v1 恢复。
 
 Derived read models **不是** backup facts，restore 后由 engines 自 restored facts 重算，例如：
 
@@ -1467,11 +1471,12 @@ MediaArtifact / retained originals not restored
 ADR-034 does NOT change:
 
 ```text
-JSON schema v4
 Application Support/Youshu/youshu-store.json
 BackupPayloadV1
 Backup format version
 ```
+
+**更新（2026-08-24）：** live JSON Store 后经 ADR-036 升至 schema v5。Full local wipe 仍移除当前用户全部本地状态，包括 `ConfirmedImportProvenance`；这符合 ADR-034 的 monotonic wipe 语义，不改写本 ADR 原决策。
 
 ### Consequences
 
@@ -1831,7 +1836,7 @@ ADR-035 clarifies Home optional-cache durability under ADR-020 / ADR-032. It doe
 ## ADR-036 — Confirmed import provenance uses local cryptographic source fingerprints; per-image Provider semantics remain deferred
 
 **日期：2026-08-22**
-**状态：Accepted — NOT YET IMPLEMENTED**
+**状态：Accepted / Implemented — VERIFIED 2026-08-24**
 
 ### Context
 
@@ -1850,7 +1855,7 @@ Production image recognition remains `MockAIProvider`. Real recognition accuracy
 
 #### A. Separate durable model — `ConfirmedImportProvenance`
 
-Introduce a future **local persisted** concept equivalent to `ConfirmedImportProvenance`:
+Introduce a **local persisted** concept `ConfirmedImportProvenance`:
 
 > Records that one **confirmed import operation** produced one or more **authoritative financial entities** from a specific **exact local input set**.
 
@@ -1865,7 +1870,7 @@ Provider transport DTO
 production observability payload
 ```
 
-Minimum semantic fields (conceptual — exact Swift names not frozen here):
+Minimum semantic fields (implemented conceptually; Swift names follow the Domain model):
 
 ```text
 user scope
@@ -1951,7 +1956,7 @@ Do **NOT** hard-block. Do **NOT** define “same image = duplicate Debt” as un
 
 #### E. Recognition metadata lifecycle target
 
-Target boundary ( **NOT YET IMPLEMENTED** ):
+Implemented recognition-metadata boundary:
 
 ```text
 Provider returns recognition result
@@ -2009,7 +2014,7 @@ Future real Provider may introduce Provider-specific DTO → normalized Applicat
 
 **Rejected as default architecture:** one Provider request per Debt document merely to obtain per-image errors (cross-document context, cost, rate limits, multi-page aggregation quality).
 
-#### I. Write ordering / failure semantics (implementation target)
+#### I. Write ordering / failure semantics (implemented)
 
 ```text
 authoritative financial fact persists successfully
@@ -2039,18 +2044,20 @@ do NOT roll back financial fact to simulate atomicity
 
 ### Consequences
 
-**When implemented:**
+**Implemented (verified 2026-08-24):**
 
-- Local exact-source dedup / prior-scan UX becomes reliable within one device/session lifecycle.
+- Local exact-source warn+allow (Transaction) and prior-scan signal (Debt) are durable across sessions on the same device.
 - Restore from Backup v1 intentionally resets provenance memory.
-- Recognition services must split “return unpersisted result” vs “persist metadata after Application acceptance”.
-- New JSON Store collection + repository port required (see Architecture / Data Model target sections).
+- Recognition services split “return unpersisted result” vs “persist metadata after Application acceptance”.
+- JSON Store schema **v5** persists `confirmedImportProvenances`.
+- Delete / wipe releases provenance refs; last-ref removal deletes the provenance row.
 
-**Until implemented:**
+**Still unchanged / still deferred:**
 
-- Cross-session exact-source protection remains **implementation pending**.
-- Per-image partial recognition (RQ-06) remains **open**.
-- Current production behavior unchanged (`MockAIProvider`, existing batch port, existing metadata write timing).
+- Per-image Provider outcome semantics (RQ-06) remain **DEFERRED**.
+- Production image recognition remains `MockAIProvider`.
+- Real recognition accuracy baseline remains **NOT ESTABLISHED**.
+- Debt field-level reconciliation / semantic Transaction duplicate detection / Backup v2 portable provenance remain **not decided by this ADR**.
 
 ### Deferred items (explicit — not decided by ADR-036)
 
@@ -2070,13 +2077,120 @@ Supports / relates to: ADR-003, ADR-015, ADR-016, ADR-021, ADR-022, ADR-029, ADR
 
 **Does NOT supersede ADR-033.** Local durable provenance ≠ Backup-v1 portable state.
 
-ADR-036 does **not** change BackupPayloadV1, local wipe monotonic semantics (ADR-034 extends naturally), Consent fields, or JSON Store schema **until a separate implementation step**.
+ADR-036 does **not** change BackupPayloadV1 shape, local wipe monotonic semantics (ADR-034 extends naturally), or Consent fields. Live JSON Store schema is **v5** solely for the provenance collection.
 
 ### Verification
 
-This ADR is **documentation-only**. No production code, tests, or schema migration in Step 4C.
+Implementation closed and verified on **2026-08-24** against candidate `153a23d2d7dbfa570c063156932a646340f0f3f0`.
 
-Windows baseline at acceptance time (Recognition & Import Reliability work, pre-implementation): **677 PASS** (Foundation 30 / Domain 436 / Data 102 / AI 109). Apple gate for latest Recognition candidate: **NOT RUN**.
+```text
+Windows:  746 PASS (Foundation 30 / Domain 493 / Data 114 / AI 109); Failed 0
+          swift build -c release PASS
+
+Apple:    ios-apple-gate.yml run 32684027127
+          665 PASS (YoushuUITests 58 / YoushuDataTests 114 / YoushuDomainTests 493); Failed 0
+          Xcode 16.4 (16F6), macos-15-arm64
+
+Gateway:  go test ./... PASS
+          go build ./... PASS
+```
+
+Acceptance-time historical baseline (docs-only Step 4C, 2026-08-22): 677 PASS; Apple gate then **NOT RUN**. That is no longer the current checkpoint.
+
+No real Bailian production image-recognition smoke was performed. `MockAIProvider` is not baseline-eligible.
+
+---
+
+## ADR-037 — Transaction Recognition v1 uses on-device pixel recognition with deterministic parsing and baseline-gated production eligibility
+
+**日期：2026-08-24**
+**状态：Accepted / Implemented — SHARED VERIFIED; APPLE VERIFICATION PENDING (Step 1 contracts)**
+
+### Context
+
+Production `TransactionExtracting` still uses `MockAIProvider`; it does not read image pixels and no real
+Transaction-recognition accuracy baseline exists. The shared contract previously returned only a
+`TransactionDraft` or an error, so it could not distinguish a supported review draft from a readable but
+unsupported layout, unreadable input, or an operational failure.
+
+### Decision
+
+Transaction Recognition v1 uses this dependency direction:
+
+```text
+on-device pixel-reading recognition (Apple Vision initially; Infrastructure-only)
+→ platform-neutral RecognizedTextSpan values
+→ deterministic TransactionRecognizedTextParsing implementation
+→ TransactionRecognitionOutcome
+→ reviewable TransactionDraft
+→ existing Application currentness gate
+→ existing user confirmation
+→ authoritative Transaction persistence
+→ ConfirmedImportProvenance
+```
+
+Shared Domain/Application code must not expose Apple Vision, `CGImage`, or `UIImage` types. The minimum
+recognized-text value contains text plus optional confidence; geometry is deliberately omitted until a
+deterministic parser proves it necessary. Raw recognized text is transient by default.
+
+Single-image Transaction outcomes are frozen as:
+
+- `recognized`: recognition produced a reviewable draft; it does not mean persisted, confirmed, correct,
+  authoritative, or provenance-recorded.
+- `unsupported`: the readable input is not a supported Transaction screenshot/layout/type and must not be guessed.
+- `unreadable`: trustworthy content is insufficient for a reviewable draft.
+- `failure`: an operational/provider/internal failure prevented completion.
+
+The deterministic parser does not call a remote LLM or Gateway, depend on Apple types, persist data, write
+provenance, or bypass confirmation. Existing aggregate draft confidence and field-level unknowns remain advisory;
+the existing Recognition Quality harness continues to measure critical fields independently, including amount,
+direction, date, merchant, and category. Overall recognition success never implies field correctness.
+
+Provider identity, engine version, and whether the recognizer genuinely inspects pixels are exposed through
+`TransactionRecognizerMetadata`. `baselineEligible` requires pixel inspection. Merely conforming to
+`TransactionExtracting` is insufficient; `MockAIProvider` remains ineligible. Establishing a baseline is distinct
+from production eligibility and production readiness, and a real baseline may fail later eligibility thresholds.
+
+### Scope and privacy
+
+v1 covers Transaction screenshots only. Existing screenshot-recognition consent remains the eligibility gate.
+Local recognition requires no remote image transmission. Original-image retention remains independently governed
+by `retainOriginalImages`. No OCR text, screenshots, bounding boxes, merchant text, or image bytes are added to
+observability, AI financial-context DTOs, Backup v1, or persisted financial facts.
+
+### Evaluation
+
+Reuse the existing Recognition Quality corpus, harness, per-field evaluators, and report. Do not create a second
+benchmark framework and do not manufacture a real baseline before a real pixel-reading recognizer exists.
+
+### Deferred
+
+- actual Apple Vision implementation — Step 2
+- full WeChat / Alipay deterministic parsing rules — Step 2
+- real accuracy run and threshold decision
+- production provider switch
+- remote Qwen/VL recognizer or Gateway image endpoint
+- Debt recognition, Debt per-image outcomes, and Debt reconciliation
+- semantic Transaction duplicate detection
+
+### Relationship
+
+Relates to, and does not supersede, ADR-003, ADR-015, ADR-016, ADR-029, ADR-035, and ADR-036. ADR-036 exact-source
+warn-and-allow behavior, Application currentness acceptance, recognition-metadata ordering, confirmation ordering,
+post-Transaction provenance write, delete/wipe lifecycle, and Backup v1 provenance exclusion remain unchanged.
+
+This Step 1 introduces no Apple OCR implementation, production Provider switch, remote image transmission, Consent
+field, Backup v1 change, or JSON Store schema change.
+
+### Verification
+
+```text
+Windows/shared targeted Transaction Recognition contract: 4 PASS; Failed 0
+Windows/shared targeted Recognition / ADR-036 regression: 70 PASS; Failed 0
+Windows/shared full gate: 750 PASS (107 suites); Failed 0
+swift build -c release: PASS
+Apple build/tests: NOT RUN in this step
+```
 
 ---
 

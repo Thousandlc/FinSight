@@ -2,7 +2,7 @@
 
 > 文档角色：项目当前存档点 / 新 Chat 恢复入口  
 > 版本：v1.0
-> **Last Updated：2026-08-22（Production Observability & Error Taxonomy Closure / ADR-035 Context Sync）**
+> **Last Updated：2026-08-24（ADR-037 Step 1 shared verified; Apple verification pending）**
 > 本文件应频繁更新；旧状态不应无限累积，重大历史移入 Decision Log。
 
 ---
@@ -92,7 +92,9 @@ Modules/Package.swift
 
 - 仓库 remote：`Thousandlc/FinSight`（private）
 - Apple-only integration gate：GitHub Actions `ios-apple-gate.yml`（`workflow_dispatch`, `macos-15`）
-- 当前 Apple Production Observability gate：**green**（run **32555839840**, HEAD `385647b5c1d4959d449d182f66ec3845d7a548b2`, Xcode **16.4 (16F6)**）
+- 历史 Apple Recognition Quality & Import Reliability / ADR-036 gate：**green**（run **32684027127**, HEAD `153a23d2d7dbfa570c063156932a646340f0f3f0`, Xcode **16.4 (16F6)**, macos-15-arm64 / macOS 15.7.7）— **不是 ADR-037 verification**
+- 当前 ADR-037 Step 1 candidate Apple gate：**NOT VERIFIED / PENDING**
+- 历史 Apple Production Observability gate：green（run **32555839840**, HEAD `385647b5c1d4959d449d182f66ec3845d7a548b2`, Xcode **16.4 (16F6)**）— **不再是当前基线**
 - 历史 Apple Privacy & AI Settings Closure gate：green（run **32470000762**, HEAD `b5a199cf87e12b3ebfcf1a2de2bf94e8f2329702`, Xcode **16.4**）— **不再是当前基线**
 - 历史 Apple Backup/Restore gate：green（run **32443787799**, HEAD `967c0c5`, Xcode **16.4**）— **不再是当前基线**
 
@@ -640,36 +642,116 @@ RemoteFinancialAIProvider
 
 ## 16. 测试状态
 
-### 2026-08-22 Recognition Quality & Import Reliability — 当前实测基线
+### 2026-08-24 ADR-037 Step 1 — 当前候选基线
 
-以下数字来自 **Recognition Quality & Import Reliability Steps 1–4A** closure verification（Windows gate；Apple gate for latest candidate **NOT RUN**）。
+当前 shared 候选已验证；Apple gate 尚未在 ADR-037 精确候选上执行。旧 Apple 结果仅作历史证据。
+
+**Windows gate**（`scripts/test-windows.bat` + `swift build -c release`）：
 
 ```text
 Foundation:  30 PASS
-Domain:     436 PASS
-Data:       102 PASS
-AI:         109 PASS
-Total:      677 PASS
+Domain:     493 PASS
+Data:       114 PASS
+AI:         113 PASS
+Total:      750 PASS
 Failed:       0
+
+swift build -c release:
+PASS
 ```
 
-**Recognition Import Provenance:** ADR-036 **ACCEPTED — IMPLEMENTATION PENDING**（Step 4C docs-only；无 production 变更）。
+Candidate commit：**PENDING**（当前 working tree；提交后记录精确 HEAD）
+
+**Historical Apple ADR-036 gate**（GitHub Actions run **32684027127**, HEAD `153a23d2d7dbfa570c063156932a646340f0f3f0`, Xcode **16.4 (16F6)**）：
+
+```text
+YoushuUITests:       58 PASS
+YoushuDataTests:    114 PASS
+YoushuDomainTests:  493 PASS
+Total:              665 PASS
+Failed:               0
+```
+
+ViewModel reliability suites actually executed:
+
+```text
+ScreenshotBookkeepingViewModelTests: 11 PASS
+DebtScannerViewModelTests:           11 PASS
+```
+
+上述 Apple 665 不是 ADR-037 verification。ADR-037 Apple result：**NOT RUN / PENDING**。
+
+**Gateway**（no Bailian production smoke）：
+
+```text
+go test ./...
+PASS
+
+go build ./...
+PASS
+```
+
+```text
+Recognition Quality & Import Reliability Closure:
+ENGINEERING CLOSURE COMPLETE
+
+Recognition Evaluation Infrastructure:
+ESTABLISHED
+
+Recognition contract infrastructure:
+ADR-037 IMPLEMENTED — SHARED VERIFIED; APPLE VERIFICATION PENDING
+
+Transaction single-image recognition outcomes:
+DEFINED (recognized / unsupported / unreadable / failure)
+
+Real Recognition Accuracy Baseline:
+NOT ESTABLISHED
+
+Real Pixel-reading Recognizer:
+NOT IMPLEMENTED
+
+Apple Vision implementation:
+NOT IMPLEMENTED
+
+Production image recognizer:
+MockAIProvider
+
+MockAIProvider baselineEligible:
+false
+
+Debt per-image Provider outcome semantics:
+DEFERRED
+
+ADR-036:
+ACCEPTED / IMPLEMENTED — VERIFIED 2026-08-24
+```
 
 | Milestone | Status |
 |-----------|--------|
-| Recognition Evaluation Infrastructure | **ESTABLISHED** (Step 2) |
-| Real recognition accuracy baseline | **NOT ESTABLISHED** |
+| Recognition Evaluation Infrastructure | **ESTABLISHED** |
+| Real recognition accuracy baseline | **NOT ESTABLISHED** (blocked by absence of a real recognizer, not by harness failure) |
 | Production pixel-reading recognizer | **NOT IMPLEMENTED** (`MockAIProvider`) |
-| Transaction same-flow import reliability | **CLOSED** (Step 3) |
-| Debt same-flow lifecycle/confirmation reliability | **CLOSED** (Step 4A) |
-| Cross-session exact-source provenance | **IMPLEMENTATION PENDING** (ADR-036) |
-| Per-image Provider partial outcomes | **INTENTIONALLY DEFERRED** (ADR-036) |
-| Latest Recognition candidate Apple gate | **NOT RUN** |
+| Transaction same-flow import reliability | **CLOSED** |
+| Debt same-flow lifecycle/confirmation reliability | **CLOSED** |
+| Cross-session exact-source provenance | **CLOSED** (ADR-036 implemented) |
+| Transaction exact-source warn+allow | **CLOSED** |
+| Debt exact-batch prior-scan signal | **CLOSED** |
+| Recognition metadata write-after-Application-acceptance | **CLOSED** |
+| Schema v5 `ConfirmedImportProvenance` | **CLOSED** |
+| Transaction single-image outcomes | **DEFINED** (ADR-037) |
+| Debt per-image Provider partial outcomes | **INTENTIONALLY DEFERRED** |
+| ADR-037 candidate Apple gate | **NOT VERIFIED / PENDING** |
+
+Do not add Windows 750 and historical Apple 665 as unique tests.
+
+### 2026-08-22 Recognition Quality & Import Reliability — 历史中间基线
+
+历史 Windows **677 PASS**（Foundation 30 / Domain 436 / Data 102 / AI 109）及当时 Apple **NOT RUN** 仅为 Steps 1–4A / ADR-036 docs-only 中间点，**不再是当前基线**。
 
 ### 2026-08-22 Production Observability & Error Taxonomy — 历史基线（ADR-035 验证轮次）
 
 以下数字来自 **2026-08-22 Production Observability final verification**（Windows + Apple 两个 platform gates）。
-**已被 Recognition & Import Reliability 工作抬升至 677（Domain +37 / AI +30 等）；下列 610 不再是 Import/Recognition 当前基线。**
+**当前 shared 候选为 Windows 750；ADR-037 Apple gate pending。** 历史 ADR-036 Apple 为 665。下列 610 / 537 仅为 ADR-035 验证轮次归档。
 
 ```text
 Windows 610 and Apple 537 are separate platform gates.
@@ -825,10 +907,10 @@ Domain 314 / Data 6 / AI 61 / Total 381
 当前：
 
 ```text
-JSON Store schema v4
+JSON Store schema v5
 ```
 
-支持 v1 → v4 migration。
+支持 v1 → v5 migration。
 
 Legacy path：
 
@@ -838,7 +920,7 @@ Application Support/Youshu/youshu-store.json
 
 **不得随意 rename**（ADR-022）。
 
-App-private retained originals 是 JSON Store 的 **sibling local storage**，不是 schema v4 的一部分：
+App-private retained originals 是 JSON Store 的 **sibling local storage**，不是 schema v5 的一部分：
 
 ```text
 Application Support/Youshu/media-originals/
@@ -860,7 +942,7 @@ Date:   2026-08-21
 - successful persistent deletion → bootstrap valid new/empty session
 - external `.finsightbackup` untouched
 
-JSON Store remains schema v4；ADR-034 requires no schema migration.
+JSON Store 现为 schema v5；ADR-034 wipe 不要求单独 schema migration。Full wipe 移除当前用户 `ConfirmedImportProvenance`。
 
 ### Backup / Restore v1 — IMPLEMENTED / APPLE-CI VERIFIED（2026-08-21）
 
@@ -875,7 +957,7 @@ Date:   2026-08-21
 - manual encrypted portable backup（`.finsightbackup` / `app.finsight.backup`）
 - Files exporter / importer
 - full-replace transactional restore + application refresh
-- privacy exclusions：`FinancialInsight`, `AIDataConsent`, AI recognition / media / debt-scan candidates 不迁移；restore 后 consent → deniedDefault
+- privacy exclusions：`FinancialInsight`, `AIDataConsent`, AI recognition / media / debt-scan candidates / **`ConfirmedImportProvenance`** 不迁移；restore 后 consent → deniedDefault；provenance → empty
 
 **不是：** CloudKit sync、automatic iCloud backup、human-readable Export、multi-device merge/sync。
 
@@ -954,7 +1036,7 @@ Trust 与 Freshness / Consent 是 **三个独立维度**（见 §18.2）。
 - Consent **不进入** freshness metadata / fingerprint
 - proactive historical insights 不要求 monthly-summary freshness metadata；revoke 不删除 proactive historical insights
 - ADR-020 deterministic fallback 仍 **non-persisted**
-- JSON Store 保持 **schema v4**；`freshnessMetadata` optional；**无需 migration**
+- JSON Store 现为 **schema v5**；`freshnessMetadata` optional；ADR-032 本身 **无需 migration**
 - Step 5A 已验证 production consent wiring 安全（`FinSightApp → AppDependencies → AIDataConsentService → HomeOverviewService`）
 
 ### P0 / Release Gate 级
@@ -977,6 +1059,8 @@ Trust 与 Freshness / Consent 是 **三个独立维度**（见 §18.2）。
 8. **remote production log aggregation / dashboards not implemented**
 9. **cost telemetry absent**（token usage 仅 Gateway 在 Bailian 实际返回时记录；无价格表 / 估算成本）
 10. **真实图片识别准确率缺少稳定 baseline**
+    - blocked by **absence of a real pixel-reading recognizer**；evaluation harness 已存在且 **不是** 缺口原因
+    - `MockAIProvider` **baselineEligible = false**
 11. **大数据量 JSON Store 性能未压测**
 
 ### P2 级
@@ -986,23 +1070,34 @@ Trust 与 Freshness / Consent 是 **三个独立维度**（见 §18.2）。
 
 Do not promote these P2 items to P0/P1 without evidence.
 
-### RESOLVED / CLOSED（2026-08-22 — Recognition Import Provenance architecture / ADR-036）
+### RESOLVED / CLOSED（2026-08-24 — Recognition Quality & Import Reliability Closure / ADR-036）
 
 ```text
-Recognition Import Provenance architecture formalized
-— ACCEPTED 2026-08-22 — NOT YET IMPLEMENTED
+Recognition Quality & Import Reliability Closure
+— ENGINEERING CLOSURE COMPLETE
+ADR-036 ACCEPTED / IMPLEMENTED — VERIFIED 2026-08-24
 ```
 
-Documented (Step 4C — docs only):
+CLOSED：
 
-- `ConfirmedImportProvenance` target model separate from `MediaArtifact` / `AIRecognitionRecord`
-- Full-file SHA-256 local fingerprints; batch identity order-insensitive / multiplicity-sensitive
-- Transaction warn+allow; Debt prior-scan signal (not hard duplicate block)
-- Provenance only after confirmed fact persist; metadata write-after-Application-acceptance target
-- Backup v1 unchanged; provenance excluded from portable backup
-- Per-image Provider semantics deferred until real pixel-reading recognizer
+- Transaction same-flow duplicate confirmation / stale recognition overwrite / Consent persist race / persist+linker secondary failure
+- Debt same-flow duplicate confirmation / stale scan overwrite / Consent persist race / partial confirmation truthfulness / DebtEvent.created retry duplicate
+- stale pre-acceptance recognition metadata writes
+- cross-session exact Transaction source detection (warn+allow)
+- cross-session exact Debt batch prior-scan detection
+- durable local import provenance (`ConfirmedImportProvenance`, schema v5)
+- recognition metadata write-after-Application-acceptance
+- provenance delete / wipe lifecycle
+- Backup v1 provenance exclusion / restore reset
 
-**Not closed:** implementation, cross-session dedup UX, RQ-06 per-image Provider contract.
+**Not closed (intentional post-milestone):**
+
+- Real pixel-reading Recognition Provider
+- Real Recognition Accuracy Baseline
+- Debt per-image Provider outcome semantics
+- Debt field-level reconciliation / merge policy
+- Semantic Transaction duplicate detection
+- Portable provenance / Backup v2
 
 ### RESOLVED / CLOSED（2026-08-22 — Production Observability & Error Taxonomy / ADR-035）
 
@@ -1131,7 +1226,7 @@ domain / DNS
 - Backup / Restore v1 实现与 verification 完成（ADR-033）
 - Privacy & AI Settings Closure / ADR-034 完成（2026-08-21）
 - Production Observability & Error Taxonomy Closure / ADR-035 完成（2026-08-22）
-- Recognition Import Provenance architecture / ADR-036 accepted（2026-08-22 — implementation pending）
+- Recognition Import Provenance / ADR-036 implemented and verified（2026-08-24）
 - 模块 rename
 - 大 milestone 完成
 - 全量测试数字发生显著变化
@@ -1142,4 +1237,4 @@ domain / DNS
 
 ## 22. 当前一句话存档
 
-**截至 2026-08-22，FinSight 的核心财务 Domain、现金流（7/30/60/90）、多债务、Consent、AI Context、Answer Validator、Stored Insight trust boundary（VERIFIED SAFE）、ADR-032 Stored Insight freshness/lifecycle（RESOLVED）、FinancialRiskPolicyEngine（regression-covered）、C2B KeyFact / Gateway materialization、ADR-020 Home AI failure isolation（FIXED）、ADR-033 manual encrypted Backup / full-replace Restore（IMPLEMENTED / APPLE-CI VERIFIED）、Privacy & AI Settings Closure / ADR-034 monotonic local wipe（IMPLEMENTED / VERIFIED）、Production Observability & Error Taxonomy / ADR-035（IMPLEMENTED / VERIFIED）、Recognition Quality evaluation infrastructure（ESTABLISHED）、Transaction/Debt same-flow import reliability（CLOSED Steps 3–4A）、以及 ADR-036 Confirmed Import Provenance architecture（ACCEPTED — IMPLEMENTATION PENDING）已建立到较成熟的内部 MVP / Pre-Production Engineering 阶段；Windows Recognition & Import Reliability 当前基线 **677 tests PASS**（Foundation 30 / Domain 436 / Data 102 / AI 109）；ADR-035 验证轮次历史基线 **610** / Apple **537**（run 32555839840）仍归档；**latest Recognition candidate Apple gate NOT RUN**；Gateway `go test ./...` PASS 且 `go build ./...` PASS；physical-device Files smoke NOT RUN；cost telemetry absent；remote log aggregation 未部署；Gateway ECS 运行态仅保留 2026-08-18 documented snapshot；ICP 备案 pending，公网 HTTPS、iOS production wiring 与真实 Bailian production smoke 仍明确禁止。生产图像识别仍为 MockAIProvider；真实识别精度 baseline NOT ESTABLISHED。不把 Windows 677 与历史 Apple 537 相加为 unique tests。**
+**截至 2026-08-24，FinSight ADR-037 Step 1 recognition contract infrastructure 已实现并完成 shared verification：Transaction single-image outcomes 为 `recognized / unsupported / unreadable / failure`；Windows/shared 当前候选 **750 PASS**（Foundation 30 / Domain 493 / Data 114 / AI 113，Failed 0），release build PASS。ADR-037 Apple gate 仍为 **NOT VERIFIED / PENDING**；历史 ADR-036 Apple gate 为 **665 PASS**（run 32684027127，HEAD `153a23d2d7dbfa570c063156932a646340f0f3f0`），不得误作本候选证据，也不得与 Windows 相加。Production Transaction recognizer 仍为 `MockAIProvider`；真实 pixel-reading recognizer、Apple Vision implementation 与真实 accuracy baseline 均 **NOT IMPLEMENTED / NOT ESTABLISHED**；Debt per-image Provider outcomes 仍 **DEFERRED**。ADR-036 provenance/currentness、schema v5、Backup v1、Consent 与 remote-image boundary 均未改变。**
