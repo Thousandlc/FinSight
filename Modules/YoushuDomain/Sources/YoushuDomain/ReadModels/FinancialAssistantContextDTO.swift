@@ -59,18 +59,47 @@ public struct FinancialAssistantContextDTO: Codable, Equatable, Sendable {
     }
 
     public struct Debt: Codable, Equatable, Sendable {
-        public var totalOutstanding: MoneyDTO
-        public var estimatedMonthlyRepayment: MoneyDTO
+        public var totalOutstanding: MoneyDTO?
+        public var totalOutstandingAvailability: FieldAvailability
+        public var estimatedMonthlyRepayment: MoneyDTO?
+        public var estimatedMonthlyRepaymentAvailability: FieldAvailability
         public var debtFreeMonth: Date?
 
         public init(
-            totalOutstanding: MoneyDTO,
-            estimatedMonthlyRepayment: MoneyDTO,
-            debtFreeMonth: Date?
+            totalOutstanding: MoneyDTO?,
+            estimatedMonthlyRepayment: MoneyDTO?,
+            debtFreeMonth: Date?,
+            totalOutstandingAvailability: FieldAvailability = .known,
+            estimatedMonthlyRepaymentAvailability: FieldAvailability = .known
         ) {
             self.totalOutstanding = totalOutstanding
+            self.totalOutstandingAvailability = totalOutstandingAvailability
             self.estimatedMonthlyRepayment = estimatedMonthlyRepayment
+            self.estimatedMonthlyRepaymentAvailability = estimatedMonthlyRepaymentAvailability
             self.debtFreeMonth = debtFreeMonth
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case totalOutstanding
+            case totalOutstandingAvailability
+            case estimatedMonthlyRepayment
+            case estimatedMonthlyRepaymentAvailability
+            case debtFreeMonth
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            totalOutstanding = try container.decodeIfPresent(MoneyDTO.self, forKey: .totalOutstanding)
+            estimatedMonthlyRepayment = try container.decodeIfPresent(MoneyDTO.self, forKey: .estimatedMonthlyRepayment)
+            debtFreeMonth = try container.decodeIfPresent(Date.self, forKey: .debtFreeMonth)
+            totalOutstandingAvailability = try container.decodeIfPresent(
+                FieldAvailability.self,
+                forKey: .totalOutstandingAvailability
+            ) ?? .known
+            estimatedMonthlyRepaymentAvailability = try container.decodeIfPresent(
+                FieldAvailability.self,
+                forKey: .estimatedMonthlyRepaymentAvailability
+            ) ?? .known
         }
     }
 
@@ -230,9 +259,15 @@ public enum FinancialAssistantContextMapper {
                 debtToIncomePercent: context.debtPaymentToIncomePercent
             ),
             debt: .init(
-                totalOutstanding: MoneyDTO(context.totalDebt),
-                estimatedMonthlyRepayment: MoneyDTO(context.estimatedMonthlyRepayment),
-                debtFreeMonth: context.estimatedDebtFreeDate
+                totalOutstanding: context.totalDebtAvailability == .missing
+                    ? nil
+                    : MoneyDTO(context.totalDebt),
+                estimatedMonthlyRepayment: context.estimatedMonthlyRepaymentAvailability == .missing
+                    ? nil
+                    : MoneyDTO(context.estimatedMonthlyRepayment),
+                debtFreeMonth: context.estimatedDebtFreeDate,
+                totalOutstandingAvailability: context.totalDebtAvailability,
+                estimatedMonthlyRepaymentAvailability: context.estimatedMonthlyRepaymentAvailability
             ),
             cashFlow30: cashFlow30,
             spending: .init(

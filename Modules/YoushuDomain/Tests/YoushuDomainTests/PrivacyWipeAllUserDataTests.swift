@@ -148,9 +148,11 @@ struct PrivacyWipeAllUserDataTests {
         #expect(try await env.container.aiDataConsents.fetch(userId: userId) == nil)
         #expect(try await env.container.aiRecognitionRecords.fetchAll(userId: userId).isEmpty)
         #expect(try await env.container.mediaArtifacts.fetchAll(userId: userId).isEmpty)
+        #expect(try await env.container.confirmedImportProvenances.fetchAll(userId: userId).isEmpty)
         let snapshot = await env.store.currentSnapshot()
         #expect(snapshot.debtEvents.allSatisfy { $0.userId != userId })
         #expect(snapshot.subscriptions.allSatisfy { $0.userId != userId })
+        #expect(snapshot.confirmedImportProvenances.allSatisfy { $0.userId != userId })
     }
 
     private func assertNoSensitiveLeak(in message: String) {
@@ -343,6 +345,14 @@ struct PrivacyWipeAllUserDataTests {
                 sourceImageId: artifact.id,
                 status: .recognized,
                 summaryLabel: "截图记账识别"
+            )
+        )
+        _ = try await container.confirmedImportProvenances.upsert(
+            try ConfirmedImportProvenance(
+                userId: userId,
+                capability: .transactionScreenshot,
+                sourceFingerprints: [ImportSourceFingerprint.sha256(of: image)],
+                confirmedEntityReferences: [.transaction(transaction.id)]
             )
         )
     }

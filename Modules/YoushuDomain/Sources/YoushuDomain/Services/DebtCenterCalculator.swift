@@ -26,16 +26,10 @@ public enum DebtCenterCalculator {
     }
 
     /// 预计每月还款：按频率折算 installment / currentDue / minimumDue。
+    /// Returns the **known-only** sum. Callers that must preserve missingness
+    /// should use `DebtMoneyPresentation.estimatedMonthly(from:)`.
     public static func estimatedMonthlyRepayment(debts: [Debt]) -> Money {
-        let active = debts.filter { isOpen($0) }
-        guard let currency = currencyCode(from: active) else { return .zeroCNY }
-        var total = Money(amount: 0, currencyCode: currency)
-        for debt in active {
-            if let monthly = monthlyAmount(for: debt), monthly.currencyCode == currency {
-                total = total + monthly
-            }
-        }
-        return total
+        DebtMoneyPresentation.estimatedMonthly(from: debts).knownAmount ?? .zeroCNY
     }
 
     /// 最近一次还款（跨所有债务事件）。
@@ -51,15 +45,14 @@ public enum DebtCenterCalculator {
     }
 
     /// 下一次还款：最近 dueDate 的债务。
-    public static func nextPayment(debts: [Debt], asOf: Date = Date()) -> (debt: Debt, date: Date, amount: Money)? {
+    /// A known due date does not invent a payment amount; `amount` stays nil
+    /// when currentDue / installmentAmount / minimumDue are all unknown.
+    public static func nextPayment(debts: [Debt], asOf: Date = Date()) -> (debt: Debt, date: Date, amount: Money?)? {
         let candidates = debts.filter { isOpen($0) && $0.dueDate != nil }
         let upcoming = candidates
-            .compactMap { debt -> (Debt, Date, Money)? in
+            .compactMap { debt -> (Debt, Date, Money?)? in
                 guard let due = debt.dueDate else { return nil }
-                let amount = debt.currentDue
-                    ?? debt.installmentAmount
-                    ?? debt.minimumDue
-                    ?? Money(amount: 0, currencyCode: debt.outstandingBalance?.currencyCode ?? "CNY")
+                let amount = debt.currentDue ?? debt.installmentAmount ?? debt.minimumDue
                 return (debt, due, amount)
             }
             .sorted { $0.1 < $1.1 }
@@ -103,7 +96,17 @@ public enum DebtCenterCalculator {
         }
 
         let total = totalDebt(debts: open).amount
-        let monthly = (monthlyRepayment ?? estimatedMonthlyRepayment(debts: open)).amount
+        let monthly: Decimal
+        if let monthlyRepayment {
+            monthly = monthlyRepayment.amount
+        } else {
+            switch DebtMoneyPresentation.estimatedMonthly(from: open) {
+            case .known(let money):
+                monthly = money.amount
+            case .unknown, .knownIncomplete:
+                monthly = 0
+            }
+        }
         if total > 0, monthly > 0 {
             // 月供占余额比例越低，清偿越慢 → 压力上升
             let burdenPercent = (monthly * 100) / total
@@ -208,12 +211,5 @@ public enum DebtCenterCalculator {
         NSDecimalRound(&rounded, &quotient, 0, .up)
         let months = NSDecimalNumber(decimal: rounded).intValue
         return max(months, 1)
-    }
-
-    private static func currencyCode(from debts: [Debt]) -> String? {
-        debts.compactMap { $0.outstandingBalance?.currencyCode
-            ?? $0.installmentAmount?.currencyCode
-            ?? $0.currentDue?.currencyCode
-        }.first
     }
 }

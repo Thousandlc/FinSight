@@ -82,6 +82,8 @@ public struct AppDependencies {
             extractor: mockAIProvider,
             transactionService: txService,
             accounts: repositories.accounts,
+            transactions: repositories.transactions,
+            confirmedImportProvenances: repositories.confirmedImportProvenances,
             consentService: consent,
             media: media,
             recognitionRecords: repositories.aiRecognitionRecords
@@ -89,6 +91,8 @@ public struct AppDependencies {
         self.debtScanner = DebtScannerService(
             scanner: mockAIProvider,
             debtService: overviewServices.debtManager,
+            debts: repositories.debts,
+            confirmedImportProvenances: repositories.confirmedImportProvenances,
             consentService: consent,
             media: media,
             recognitionRecords: repositories.aiRecognitionRecords
@@ -176,12 +180,16 @@ public struct AppDependencies {
     }
 
     @MainActor
-    public func makeScreenshotBookkeepingViewModel(onSaved: (@Sendable () async -> Void)? = nil) -> ScreenshotBookkeepingViewModel {
+    public func makeScreenshotBookkeepingViewModel(
+        onSaved: (@Sendable () async -> Void)? = nil,
+        onViewExistingTransaction: (@Sendable (UUID) async -> Void)? = nil
+    ) -> ScreenshotBookkeepingViewModel {
         ScreenshotBookkeepingViewModel(
             bookkeeping: screenshotBookkeeping,
             accounts: repositories.accounts,
             session: session,
-            onSaved: onSaved
+            onSaved: onSaved,
+            onViewExistingTransaction: onViewExistingTransaction
         )
     }
 
@@ -198,11 +206,15 @@ public struct AppDependencies {
     }
 
     @MainActor
-    public func makeDebtScannerViewModel(onCompleted: (@Sendable () async -> Void)? = nil) -> DebtScannerViewModel {
+    public func makeDebtScannerViewModel(
+        onCompleted: (@Sendable () async -> Void)? = nil,
+        onViewExistingDebt: (@Sendable (UUID) async -> Void)? = nil
+    ) -> DebtScannerViewModel {
         DebtScannerViewModel(
             scanner: debtScanner,
             session: session,
-            onCompleted: onCompleted
+            onCompleted: onCompleted,
+            onViewExistingDebt: onViewExistingDebt
         )
     }
 

@@ -91,7 +91,7 @@ struct StoredInsightFreshnessPersistenceTests {
         let loaded = try await reloaded.insights.fetchAll(userId: userId)
         #expect(loaded.count == 1)
         #expect(loaded[0].freshnessMetadata == metadata)
-        #expect(await reloaded.store.currentSnapshot().schemaVersion == 4)
+        #expect(await reloaded.store.currentSnapshot().schemaVersion == YoushuSnapshot.currentSchemaVersion)
     }
 
     @Test("legacy snapshot without freshness metadata still loads after reload")
@@ -149,6 +149,6 @@ struct StoredInsightFreshnessPersistenceTests {
         let insights = try await container.insights.fetchAll(userId: userId)
         #expect(insights.count == 1)
         #expect(insights[0].freshnessMetadata == nil)
-        #expect(await store.currentSnapshot().schemaVersion == 4)
+        #expect(await store.currentSnapshot().schemaVersion == YoushuSnapshot.currentSchemaVersion)
     }
 }

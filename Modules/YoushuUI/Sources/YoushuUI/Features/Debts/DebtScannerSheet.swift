@@ -31,6 +31,8 @@ public struct DebtScannerSheet: View {
                     pickStep
                 case .preview:
                     previewStep
+                case .priorScanWarning:
+                    priorScanWarningStep
                 case .scanning:
                     YSLoadingState(message: "正在分析账单并发现债务…")
                 case .review:
@@ -54,6 +56,7 @@ public struct DebtScannerSheet: View {
                 }
             }
         }
+        .onDisappear { viewModel.handleDismiss() }
         .onChange(of: pickerItems) { _, items in
             guard !items.isEmpty else { return }
             Task { await loadPickerItems(items) }
@@ -76,8 +79,8 @@ public struct DebtScannerSheet: View {
                 }
             }
             Spacer()
-            YSButton("开始扫描我的债务") {
-                viewModel.acceptIntro()
+            YSButton(isAcceptingIntro ? "保存授权中…" : "开始扫描我的债务", isLoading: viewModel.isAcceptingIntro) {
+                Task { await viewModel.acceptIntro() }
             }
         }
         .padding(YSSpacing.md)
@@ -148,7 +151,7 @@ public struct DebtScannerSheet: View {
                 }
 
                 YSButton("开始 AI 分析") {
-                    Task { await viewModel.startScan() }
+                    viewModel.startScan()
                 }
                 YSButton("重新选择", kind: .secondary) {
                     pickerItems = []
@@ -157,6 +160,93 @@ public struct DebtScannerSheet: View {
             }
             .padding(YSSpacing.md)
         }
+    }
+
+    private var priorScanWarningStep: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: YSSpacing.lg) {
+                YSCard {
+                    VStack(alignment: .leading, spacing: YSSpacing.sm) {
+                        Text("这批账单之前扫描过")
+                            .font(YSTypography.title3)
+                        Text("与之前已确认扫描的来源一致。你可以查看相关债务，也可以继续扫描。")
+                            .font(YSTypography.body)
+                            .foregroundStyle(YSColor.Fallback.textSecondary)
+                    }
+                }
+
+                if let warning = viewModel.priorScanWarning, !warning.existingDebts.isEmpty {
+                    YSCard {
+                        VStack(alignment: .leading, spacing: YSSpacing.sm) {
+                            Text("相关债务")
+                                .font(YSTypography.headline)
+                            ForEach(warning.existingDebts) { debt in
+                                priorScanDebtRow(debt)
+                            }
+                        }
+                    }
+                }
+
+                if let error = viewModel.formError {
+                    Text(error)
+                        .font(YSTypography.caption)
+                        .foregroundStyle(YSColor.Fallback.warning)
+                }
+
+                if let warning = viewModel.priorScanWarning {
+                    if warning.existingDebts.count == 1,
+                       let debt = warning.existingDebts.first {
+                        YSButton("查看相关债务", kind: .secondary) {
+                            Task {
+                                await viewModel.viewExistingDebt(debt.id)
+                                dismiss()
+                            }
+                        }
+                    } else if warning.existingDebts.count > 1 {
+                        ForEach(warning.existingDebts) { debt in
+                            YSButton("查看：\(priorScanDebtLabel(debt))", kind: .secondary) {
+                                Task {
+                                    await viewModel.viewExistingDebt(debt.id)
+                                    dismiss()
+                                }
+                            }
+                        }
+                    }
+                }
+
+                YSButton("继续扫描") {
+                    viewModel.continueDespitePriorScan()
+                }
+                YSButton("返回", kind: .secondary) {
+                    viewModel.cancelPriorScanWarning()
+                }
+            }
+            .padding(YSSpacing.md)
+        }
+    }
+
+    private func priorScanDebtRow(_ debt: PriorImportedDebtSummary) -> some View {
+        VStack(alignment: .leading, spacing: YSSpacing.xxs) {
+            Text(priorScanDebtLabel(debt))
+                .font(YSTypography.callout)
+                .foregroundStyle(YSColor.Fallback.textPrimary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func priorScanDebtLabel(_ debt: PriorImportedDebtSummary) -> String {
+        let lender = debt.lender?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let product = debt.productName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let lender, !lender.isEmpty {
+            if let product, !product.isEmpty {
+                return "\(lender) · \(product)"
+            }
+            return lender
+        }
+        if let balance = debt.outstandingBalanceText {
+            return "债务 · ¥\(balance)"
+        }
+        return "相关债务"
     }
 
     private var reviewStep: some View {
@@ -192,13 +282,21 @@ public struct DebtScannerSheet: View {
                         .foregroundStyle(YSColor.Fallback.warning)
                 }
 
+                if let warning = viewModel.provenanceWarning {
+                    Text(warning)
+                        .font(YSTypography.caption)
+                        .foregroundStyle(YSColor.Fallback.warning)
+                }
+
                 YSButton(
                     viewModel.isSaving ? "创建中…" : "全部确认（\(viewModel.confirmableItems.count)）",
                     isLoading: viewModel.isSaving
                 ) {
                     Task {
                         let ok = await viewModel.confirmAll()
-                        if ok { dismiss() }
+                        if ok || viewModel.allReviewResolved {
+                            dismiss()
+                        }
                     }
                 }
                 .disabled(viewModel.confirmableItems.isEmpty)
@@ -234,6 +332,10 @@ public struct DebtScannerSheet: View {
                     Spacer()
                     if item.isIgnored {
                         YSBadge("已忽略", tone: .neutral)
+                    } else if case .confirmed = item.confirmationState {
+                        YSBadge("已确认", tone: .positive)
+                    } else if case .failed = item.confirmationState {
+                        YSBadge("失败", tone: .warning)
                     } else {
                         YSBadge("待确认", tone: .brand)
                     }
@@ -245,7 +347,7 @@ public struct DebtScannerSheet: View {
                 detailLine("信息完整度", "\(draft.profileCompletenessPercent)%")
                 detailLine("AI 置信度", draft.confidence.map { "\(Int($0 * 100))%" } ?? "—")
 
-                if !item.isIgnored {
+                if item.isConfirmable {
                     HStack(spacing: YSSpacing.sm) {
                         Button("编辑") { editingCandidate = draft }
                         Button("忽略") { viewModel.ignoreItem(id: item.id) }
@@ -253,7 +355,7 @@ public struct DebtScannerSheet: View {
                         Button("确认") {
                             Task {
                                 let ok = await viewModel.confirmSingle(id: item.id)
-                                if ok, viewModel.confirmableItems.isEmpty {
+                                if ok, viewModel.allReviewResolved {
                                     dismiss()
                                 }
                             }
@@ -262,7 +364,7 @@ public struct DebtScannerSheet: View {
                     }
                     .font(YSTypography.callout)
                     .foregroundStyle(YSColor.Fallback.brandPrimary)
-                } else {
+                } else if item.isIgnored {
                     Button("恢复") { viewModel.restoreItem(id: item.id) }
                         .font(YSTypography.callout)
                         .foregroundStyle(YSColor.Fallback.brandPrimary)
@@ -339,12 +441,12 @@ public struct DebtScannerSheet: View {
 }
 
 struct DebtCandidateEditSheet: View {
-    @State private var draft: DebtCandidate
+    @State private var draft: DebtCandidateEditDraft
     @Environment(\.dismiss) private var dismiss
     let onSave: (DebtCandidate) -> Void
 
     init(candidate: DebtCandidate, onSave: @escaping (DebtCandidate) -> Void) {
-        _draft = State(initialValue: candidate)
+        _draft = State(initialValue: DebtCandidateEditDraft(from: candidate))
         self.onSave = onSave
     }
 
@@ -355,8 +457,8 @@ struct DebtCandidateEditSheet: View {
                     TextField("债权方", text: stringBinding(\.lender))
                     TextField("产品名称", text: stringBinding(\.productName))
                     Picker("类型", selection: Binding(
-                        get: { draft.debtType ?? .other },
-                        set: { draft.debtType = $0 }
+                        get: { draft.candidate.debtType ?? .other },
+                        set: { draft.candidate.debtType = $0 }
                     )) {
                         ForEach(DebtType.mvpCases, id: \.self) { type in
                             Text(type.displayName).tag(type)
@@ -374,14 +476,17 @@ struct DebtCandidateEditSheet: View {
                         .keyboardType(.decimalPad)
                 }
                 Section("其他") {
-                    DatePicker(
-                        "还款日",
-                        selection: Binding(
-                            get: { draft.dueDate ?? Date() },
-                            set: { draft.dueDate = $0 }
-                        ),
-                        displayedComponents: .date
-                    )
+                    Toggle("设置还款日", isOn: includeDueDateBinding)
+                    if draft.includeDueDate {
+                        DatePicker(
+                            "还款日",
+                            selection: Binding(
+                                get: { draft.candidate.dueDate ?? Date() },
+                                set: { draft.candidate.dueDate = $0 }
+                            ),
+                            displayedComponents: .date
+                        )
+                    }
                     TextField("剩余期数", text: intBinding(\.remainingInstallments))
                         .keyboardType(.numberPad)
                     TextField("利率（可留空=未知）", text: decimalBinding(\.interestRate))
@@ -396,7 +501,7 @@ struct DebtCandidateEditSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
-                        onSave(draft)
+                        onSave(draft.finalized())
                         dismiss()
                     }
                 }
@@ -404,22 +509,29 @@ struct DebtCandidateEditSheet: View {
         }
     }
 
+    private var includeDueDateBinding: Binding<Bool> {
+        Binding(
+            get: { draft.includeDueDate },
+            set: { draft.setIncludeDueDate($0, explicitDate: Date()) }
+        )
+    }
+
     private func stringBinding(_ keyPath: WritableKeyPath<DebtCandidate, String?>) -> Binding<String> {
         Binding(
-            get: { draft[keyPath: keyPath] ?? "" },
-            set: { draft[keyPath: keyPath] = $0.isEmpty ? nil : $0 }
+            get: { draft.candidate[keyPath: keyPath] ?? "" },
+            set: { draft.candidate[keyPath: keyPath] = $0.isEmpty ? nil : $0 }
         )
     }
 
     private func decimalBinding(_ keyPath: WritableKeyPath<DebtCandidate, Decimal?>) -> Binding<String> {
         Binding(
             get: {
-                guard let value = draft[keyPath: keyPath] else { return "" }
+                guard let value = draft.candidate[keyPath: keyPath] else { return "" }
                 return "\(value)"
             },
             set: { text in
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                draft[keyPath: keyPath] = trimmed.isEmpty
+                draft.candidate[keyPath: keyPath] = trimmed.isEmpty
                     ? nil
                     : Decimal(string: trimmed.replacingOccurrences(of: ",", with: ""))
             }
@@ -429,12 +541,12 @@ struct DebtCandidateEditSheet: View {
     private func intBinding(_ keyPath: WritableKeyPath<DebtCandidate, Int?>) -> Binding<String> {
         Binding(
             get: {
-                guard let value = draft[keyPath: keyPath] else { return "" }
+                guard let value = draft.candidate[keyPath: keyPath] else { return "" }
                 return "\(value)"
             },
             set: { text in
                 let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                draft[keyPath: keyPath] = trimmed.isEmpty ? nil : Int(trimmed)
+                draft.candidate[keyPath: keyPath] = trimmed.isEmpty ? nil : Int(trimmed)
             }
         )
     }

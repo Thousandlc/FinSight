@@ -69,8 +69,11 @@ public enum FinancialContextBuilder {
                 safeBalance: safe
             )
         )
-        let totalDebt = DebtBalanceCalculator.totalOutstanding(debts: source.debts)
-        let monthlyRepayment = DebtCenterCalculator.estimatedMonthlyRepayment(debts: source.debts)
+        let outstanding = DebtMoneyPresentation.knownOutstandingTotal(
+            from: source.debts,
+            computed: DebtBalanceCalculator.totalOutstanding(debts: source.debts)
+        )
+        let monthly = DebtMoneyPresentation.estimatedMonthly(from: source.debts)
         let debtFree = DebtCenterCalculator.debtFreeEstimate(debts: source.debts, asOf: source.asOf)
 
         var ratio: Decimal?
@@ -120,8 +123,10 @@ public enum FinancialContextBuilder {
             monthlyExpense: summary.monthlyExpense,
             monthlyDebtPayment: summary.monthlyDebtPayment,
             estimatedMonthEndBalance: summary.estimatedMonthEndBalance,
-            totalDebt: totalDebt,
-            estimatedMonthlyRepayment: monthlyRepayment,
+            totalDebt: outstanding.knownAmount ?? .zeroCNY,
+            totalDebtAvailability: outstanding.availability,
+            estimatedMonthlyRepayment: monthly.knownAmount ?? .zeroCNY,
+            estimatedMonthlyRepaymentAvailability: monthly.availability,
             estimatedDebtFreeDate: debtFree,
             financialHealthScore: summary.financialHealthScore,
             debtPaymentToIncomePercent: ratio,

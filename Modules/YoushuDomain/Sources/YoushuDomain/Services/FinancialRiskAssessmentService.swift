@@ -29,11 +29,10 @@ public enum FinancialRiskAssessmentService {
     ) -> FinancialRiskPolicyAssemblyContext {
 
         let pressureScore = DebtCenterCalculator.debtPressureScore(
-
             debts: source.debts,
-
-            monthlyRepayment: context.estimatedMonthlyRepayment
-
+            monthlyRepayment: context.estimatedMonthlyRepaymentAvailability == .known
+                ? context.estimatedMonthlyRepayment
+                : nil
         )
 
         let pressureLevel = DebtCenterCalculator.debtPressureLevel(score: pressureScore)

@@ -18,7 +18,7 @@ public struct TransactionService: TransactionManaging {
         self.debtLinker = debtLinker
     }
 
-    public func record(_ input: RecordTransactionInput, userId: UUID) async throws -> Transaction {
+    public func record(_ input: RecordTransactionInput, userId: UUID) async throws -> RecordTransactionOutcome {
         try validateAmount(input.amount)
         guard input.formType != .transfer else {
             throw DomainError.validationFailed("Use recordTransfer for transfer type")
@@ -30,6 +30,7 @@ public struct TransactionService: TransactionManaging {
 
         let money = Money(amount: input.amount, currencyCode: input.currencyCode)
         var tx = Transaction(
+            id: input.idempotencyKey ?? UUID(),
             userId: userId,
             accountId: input.accountId,
             amount: money,
@@ -44,14 +45,18 @@ public struct TransactionService: TransactionManaging {
         )
         try await transactions.upsert(tx)
 
+        var linkingIssue: String?
         if let debtLinker {
-            _ = try await debtLinker.processNewTransaction(tx, userId: userId)
-            // 自动关联可能写回 relatedDebtId
-            if let refreshed = try await transactions.fetch(id: tx.id) {
-                tx = refreshed
+            do {
+                _ = try await debtLinker.processNewTransaction(tx, userId: userId)
+                if let refreshed = try await transactions.fetch(id: tx.id) {
+                    tx = refreshed
+                }
+            } catch {
+                linkingIssue = PrivacySafeErrorMapper.userMessage(for: error)
             }
         }
-        return tx
+        return RecordTransactionOutcome(transaction: tx, debtLinkingIssue: linkingIssue)
     }
 
     public func recordTransfer(_ input: RecordTransferInput, userId: UUID) async throws -> (outbound: Transaction, inbound: Transaction) {

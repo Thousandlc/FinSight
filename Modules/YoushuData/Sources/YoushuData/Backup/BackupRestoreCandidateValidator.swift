@@ -28,6 +28,9 @@ enum BackupRestoreCandidateValidator {
         guard candidate.suspectedDebts.isEmpty else {
             throw BackupPayloadValidationError.invalidReference(field: "SuspectedDebt")
         }
+        guard candidate.confirmedImportProvenances.isEmpty else {
+            throw BackupPayloadValidationError.invalidReference(field: "ConfirmedImportProvenance")
+        }
         guard candidate.users.allSatisfy({ !$0.debtImportInProgress }) else {
             throw BackupPayloadValidationError.invalidReference(field: "User.debtImportInProgress")
         }

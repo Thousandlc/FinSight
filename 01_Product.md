@@ -186,6 +186,10 @@ MVP 录入方式：
 3. 用户确认。
 4. 写入 Transaction。
 
+**Accepted target behavior / planned closure（ADR-036 — NOT YET IMPLEMENTED）：**
+
+若用户再次导入**密码学指纹完全相同**且已有 confirmed Transaction 关联的截图，产品应 **warn + allow**：提示已有记录、可跳转查看，并允许用户显式 override 继续导入。不 hard-block；不以 merchant/amount/date/category 作为重复身份。
+
 同时支持：
 
 - 手动记账
@@ -282,6 +286,10 @@ AI 债务扫描
 **不要求用户第一次就填写完整债务档案。**
 
 系统允许 partial 状态，随着后续截图、账单、还款交易不断补齐。
+
+**Accepted target behavior / planned closure（ADR-036 — NOT YET IMPLEMENTED）：**
+
+若用户再次扫描**批次指纹完全相同**且此前已 confirmed 的债务输入，产品应显示 **prior-scan / reconciliation 信号**（可关联已有 Debt），**不** automatic hard duplicate rejection。同一截图不等于 universal “duplicate Debt” 规则。字段级 merge/reconciliation（如 outstanding 是否覆盖）** intentionally deferred**。
 
 ---
 

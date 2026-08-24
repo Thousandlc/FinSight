@@ -205,6 +205,14 @@ struct BackupRestoreServiceTests {
                 reason: "local suspected"
             )
         )
+        _ = try await container.confirmedImportProvenances.upsert(
+            try ConfirmedImportProvenance(
+                userId: userId,
+                capability: .debtScan,
+                sourceFingerprints: [ImportSourceFingerprint.sha256(of: Data("local-provenance".utf8))],
+                confirmedEntityReferences: [.debt(UUID())]
+            )
+        )
     }
 
     @Test("simulated persistence IO read failure is observable")
@@ -310,6 +318,7 @@ struct BackupRestoreServiceTests {
         #expect(snapshot.mediaArtifacts.isEmpty)
         #expect(snapshot.pendingDebtLinks.isEmpty)
         #expect(snapshot.suspectedDebts.isEmpty)
+        #expect(snapshot.confirmedImportProvenances.isEmpty)
         #expect(snapshot.users.first?.debtImportInProgress == false)
 
         let consentService = AIDataConsentService(consents: container.aiDataConsents)

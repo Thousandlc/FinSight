@@ -69,6 +69,10 @@ public enum FinancialInsightGenerator {
         guard let next = DebtCenterCalculator.nextPayment(debts: debts, asOf: asOf) else { return nil }
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: asOf), to: calendar.startOfDay(for: next.date)).day ?? 0
         guard days >= 0, days <= 14 else { return nil }
+        var amounts: [String: Money] = [:]
+        if let amount = next.amount {
+            amounts["dueAmount"] = amount
+        }
         return InsightFactPack(
             type: .debtRisk,
             titleHint: "债务即将到期",
@@ -77,7 +81,7 @@ public enum FinancialInsightGenerator {
                 "dueInDays": "\(days)",
                 "dueDate": "\(calendar.component(.month, from: next.date))月\(calendar.component(.day, from: next.date))日",
             ],
-            amounts: ["dueAmount": next.amount],
+            amounts: amounts,
             sourceDebtIds: [next.debt.id],
             sourceLabels: ["Debt"]
         )
@@ -121,7 +125,9 @@ public enum FinancialInsightGenerator {
 
     private static func debtMilestone(context: FinancialContext, debts: [Debt]) -> InsightFactPack? {
         let open = debts.filter { DebtCenterCalculator.isOpen($0) }
-        guard !open.isEmpty, context.totalDebt.amount > 0 else { return nil }
+        guard !open.isEmpty,
+              context.totalDebtAvailability == .known,
+              context.totalDebt.amount > 0 else { return nil }
         let original = open.compactMap { $0.originalAmount?.amount }.reduce(Decimal(0), +)
         guard original > 0 else { return nil }
         let paidRatio = ((original - context.totalDebt.amount) * 100) / original

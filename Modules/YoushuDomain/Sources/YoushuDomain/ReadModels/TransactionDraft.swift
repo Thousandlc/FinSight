@@ -48,8 +48,36 @@ public struct TransactionDraft: Sendable, Hashable, Codable, Equatable {
     }
 }
 
-/// 识别阶段结果：保留 AI 原始草稿，与用户最终编辑分离。
+/// Provider 识别完成、Application 接受前的暂态结果（ADR-036 Step C）。
+/// 不表示 MediaArtifact / AIRecognitionRecord 已持久化。
+public struct PendingScreenshotRecognition: Sendable, Equatable {
+    public let acceptanceToken: UUID
+    public let aiDraft: TransactionDraft
+    public var editableDraft: TransactionDraft
+    public let warnings: [String]
+    public let imageData: Data
+    public let importIdentity: TransactionScreenshotImportIdentity
+
+    public init(
+        acceptanceToken: UUID = UUID(),
+        aiDraft: TransactionDraft,
+        editableDraft: TransactionDraft? = nil,
+        warnings: [String] = [],
+        imageData: Data,
+        importIdentity: TransactionScreenshotImportIdentity
+    ) {
+        self.acceptanceToken = acceptanceToken
+        self.aiDraft = aiDraft
+        self.editableDraft = editableDraft ?? aiDraft
+        self.warnings = warnings
+        self.imageData = imageData
+        self.importIdentity = importIdentity
+    }
+}
+
+/// Application 接受后进入审核流程的识别结果；此时 eligible 元数据已持久化。
 public struct ScreenshotRecognitionResult: Sendable, Equatable {
+    public let acceptanceToken: UUID
     /// AI 原始识别结果（只读展示）。
     public let aiDraft: TransactionDraft
     /// 供用户编辑的初始值（可与 aiDraft 相同，用户修改后不再回写 aiDraft）。
@@ -58,17 +86,45 @@ public struct ScreenshotRecognitionResult: Sendable, Equatable {
     public let warnings: [String]
     /// 临时图片引用；默认不永久保存原图。
     public let sourceImageId: String?
+    public let importIdentity: TransactionScreenshotImportIdentity
 
     public init(
+        acceptanceToken: UUID,
         aiDraft: TransactionDraft,
         editableDraft: TransactionDraft? = nil,
         warnings: [String] = [],
-        sourceImageId: String? = nil
+        sourceImageId: String? = nil,
+        importIdentity: TransactionScreenshotImportIdentity
     ) {
+        self.acceptanceToken = acceptanceToken
         self.aiDraft = aiDraft
         self.editableDraft = editableDraft ?? aiDraft
         self.warnings = warnings
         self.sourceImageId = sourceImageId
+        self.importIdentity = importIdentity
+    }
+}
+
+/// Screenshot confirm outcome. Transaction persistence is authoritative; secondary issues are degraded only.
+public struct ConfirmScreenshotTransactionOutcome: Sendable, Equatable {
+    public var transaction: Transaction
+    public var debtLinkingIssue: String?
+    public var provenanceIssue: String?
+
+    public init(
+        transaction: Transaction,
+        debtLinkingIssue: String? = nil,
+        provenanceIssue: String? = nil
+    ) {
+        self.transaction = transaction
+        self.debtLinkingIssue = debtLinkingIssue
+        self.provenanceIssue = provenanceIssue
+    }
+
+    public var isFullySuccessful: Bool { debtLinkingIssue == nil && provenanceIssue == nil }
+
+    public var hasSecondaryIssues: Bool {
+        debtLinkingIssue != nil || provenanceIssue != nil
     }
 }
 
@@ -84,6 +140,10 @@ public struct ConfirmScreenshotTransactionInput: Sendable, Equatable {
     public var formType: TransactionFormType
     public var recognitionConfidence: Double?
     public var sourceImageId: String?
+    /// Import-local confirmation token. Reused to guarantee at-most-one Transaction per review flow.
+    public var confirmationToken: UUID
+    /// ADR-036 exact-source identity; required for screenshot provenance write.
+    public var importIdentity: TransactionScreenshotImportIdentity?
 
     public init(
         amount: Decimal,
@@ -95,7 +155,9 @@ public struct ConfirmScreenshotTransactionInput: Sendable, Equatable {
         note: String? = nil,
         formType: TransactionFormType,
         recognitionConfidence: Double? = nil,
-        sourceImageId: String? = nil
+        sourceImageId: String? = nil,
+        confirmationToken: UUID,
+        importIdentity: TransactionScreenshotImportIdentity? = nil
     ) {
         self.amount = amount
         self.currencyCode = currencyCode.uppercased()
@@ -107,5 +169,7 @@ public struct ConfirmScreenshotTransactionInput: Sendable, Equatable {
         self.formType = formType
         self.recognitionConfidence = recognitionConfidence
         self.sourceImageId = sourceImageId
+        self.confirmationToken = confirmationToken
+        self.importIdentity = importIdentity
     }
 }

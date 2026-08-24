@@ -58,11 +58,7 @@ struct DebtDetailView: View {
                         Text(debt.productName ?? debt.debtType.displayName)
                             .font(YSTypography.caption)
                             .foregroundStyle(YSColor.Fallback.textSecondary)
-                        YSMoneyText(
-                            debt.outstandingBalance ?? .zeroCNY,
-                            style: YSTypography.amountLarge,
-                            color: YSColor.Fallback.debt
-                        )
+                        outstandingHero(debt.outstandingBalance)
                         Text("信息完整度 \(detail.profileCompletenessPercent)% · \(debt.source.displayName)")
                             .font(YSTypography.caption2)
                             .foregroundStyle(YSColor.Fallback.textSecondary)
@@ -123,6 +119,18 @@ struct DebtDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private func outstandingHero(_ balance: Money?) -> some View {
+        switch DebtMoneyPresentation(balance) {
+        case .unknown:
+            Text(DebtMoneyPresentation.unknownPlaceholder)
+                .font(YSTypography.amountLarge)
+                .foregroundStyle(YSColor.Fallback.debt)
+        case .known(let money), .knownIncomplete(let money):
+            YSMoneyText(money, style: YSTypography.amountLarge, color: YSColor.Fallback.debt)
+        }
+    }
+
     private func detailRow(_ title: String, _ value: String) -> some View {
         HStack {
             Text(title)
@@ -136,7 +144,7 @@ struct DebtDetailView: View {
     }
 
     private func moneyText(_ money: Money?) -> String {
-        money.map { YSMoneyFormatter.string(for: $0) } ?? "—"
+        DebtMoneyPresentation(money).text(formatted: { YSMoneyFormatter.string(for: $0) })
     }
 
     private func dateText(_ date: Date?) -> String {

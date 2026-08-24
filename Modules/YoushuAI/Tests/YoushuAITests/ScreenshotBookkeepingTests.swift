@@ -44,43 +44,64 @@ struct ScreenshotBookkeepingTests {
         }
     }
 
+    private func recognize(
+        _ service: ScreenshotBookkeepingService,
+        imageData: Data,
+        userId: UUID
+    ) async throws -> PendingScreenshotRecognition {
+        let identity = TransactionScreenshotImportIdentity.from(imageData: imageData)
+        return try await service.recognize(imageData: imageData, userId: userId, importIdentity: identity)
+    }
+
+    private func acceptRecognition(
+        _ service: ScreenshotBookkeepingService,
+        imageData: Data,
+        userId: UUID
+    ) async throws -> ScreenshotRecognitionResult {
+        let pending = try await recognize(service, imageData: imageData, userId: userId)
+        return try await service.acceptRecognition(pending, userId: userId)
+    }
+
     @Test("normal recognition returns structured draft")
     func normalRecognition() async throws {
         let env = makeService(behavior: .success)
         try await seedUserAndAccounts(container: env.container, userId: env.userId, accounts: [env.wechat, env.cash])
 
-        let result = try await env.service.recognize(imageData: sampleImage, userId: env.userId)
-        #expect(result.aiDraft.amount == Decimal(string: "36.50"))
-        #expect(result.aiDraft.merchant == "地铁出行")
-        #expect(result.aiDraft.transactionType == .expense)
-        #expect(result.aiDraft.category == "交通")
-        #expect(result.aiDraft.confidence == 0.91)
+        let pending = try await recognize(env.service, imageData: sampleImage, userId: env.userId)
+        #expect(pending.aiDraft.amount == Decimal(string: "36.50"))
+        #expect(pending.aiDraft.merchant == "地铁出行")
+        #expect(pending.aiDraft.transactionType == .expense)
+        #expect(pending.aiDraft.category == "交通")
+        #expect(pending.aiDraft.confidence == 0.91)
+        #expect(pending.warnings.isEmpty)
+        let result = try await env.service.acceptRecognition(pending, userId: env.userId)
         #expect(result.sourceImageId != nil)
-        #expect(result.warnings.isEmpty)
+        #expect(try await env.container.mediaArtifacts.fetchAll(userId: env.userId).isEmpty)
+        #expect(try await env.container.aiRecognitionRecords.fetchAll(userId: env.userId).isEmpty)
     }
 
     @Test("amount missing fails recognition")
     func amountMissing() async throws {
         let env = makeService(behavior: .amountMissing)
         await #expect(throws: AIRecognitionError.self) {
-            try await env.service.recognize(imageData: sampleImage, userId: env.userId)
+            try await recognize(env.service, imageData: sampleImage, userId: env.userId)
         }
     }
 
     @Test("date missing yields warning but allows recognition")
     func dateMissing() async throws {
         let env = makeService(behavior: .dateMissing)
-        let result = try await env.service.recognize(imageData: sampleImage, userId: env.userId)
-        #expect(result.aiDraft.date == nil)
-        #expect(result.aiDraft.amount == Decimal(string: "36.50"))
-        #expect(result.warnings.contains(where: { $0.contains("时间") }))
+        let pending = try await recognize(env.service, imageData: sampleImage, userId: env.userId)
+        #expect(pending.aiDraft.date == nil)
+        #expect(pending.aiDraft.amount == Decimal(string: "36.50"))
+        #expect(pending.warnings.contains(where: { $0.contains("时间") }))
     }
 
     @Test("ambiguous amounts fail recognition")
     func ambiguousAmounts() async throws {
         let env = makeService(behavior: .ambiguousAmount)
         do {
-            _ = try await env.service.recognize(imageData: sampleImage, userId: env.userId)
+            _ = try await recognize(env.service, imageData: sampleImage, userId: env.userId)
             Issue.record("Expected ambiguous amount error")
         } catch let error as AIRecognitionError {
             guard case .ambiguousAmount(let amounts) = error else {
@@ -95,7 +116,7 @@ struct ScreenshotBookkeepingTests {
     func invalidFormat() async throws {
         let env = makeService(behavior: .invalidResponse)
         await #expect(throws: AIRecognitionError.invalidResponse("JSON missing required envelope")) {
-            try await env.service.recognize(imageData: sampleImage, userId: env.userId)
+            try await recognize(env.service, imageData: sampleImage, userId: env.userId)
         }
     }
 
@@ -103,7 +124,7 @@ struct ScreenshotBookkeepingTests {
     func networkError() async throws {
         let env = makeService(behavior: .networkError)
         await #expect(throws: AIRecognitionError.requestFailed("模拟网络错误")) {
-            try await env.service.recognize(imageData: sampleImage, userId: env.userId)
+            try await recognize(env.service, imageData: sampleImage, userId: env.userId)
         }
     }
 
@@ -111,7 +132,7 @@ struct ScreenshotBookkeepingTests {
     func timeout() async throws {
         let env = makeService(behavior: .timeout)
         await #expect(throws: AIRecognitionError.networkTimeout) {
-            try await env.service.recognize(imageData: sampleImage, userId: env.userId)
+            try await recognize(env.service, imageData: sampleImage, userId: env.userId)
         }
     }
 
@@ -119,7 +140,7 @@ struct ScreenshotBookkeepingTests {
     func emptyImage() async throws {
         let env = makeService(behavior: .success)
         await #expect(throws: AIRecognitionError.imageUnreadable) {
-            try await env.service.recognize(imageData: Data(), userId: env.userId)
+            try await recognize(env.service, imageData: Data(), userId: env.userId)
         }
     }
 
@@ -128,11 +149,11 @@ struct ScreenshotBookkeepingTests {
         let env = makeService(behavior: .success)
         try await seedUserAndAccounts(container: env.container, userId: env.userId, accounts: [env.wechat, env.cash])
 
-        let result = try await env.service.recognize(imageData: sampleImage, userId: env.userId)
+        let result = try await acceptRecognition(env.service, imageData: sampleImage, userId: env.userId)
         #expect(result.aiDraft.amount == Decimal(string: "36.50"))
 
         // 用户修改金额与商户；aiDraft 保持不变
-        let tx = try await env.service.confirm(
+        let outcome = try await env.service.confirm(
             ConfirmScreenshotTransactionInput(
                 amount: Decimal(string: "40.00")!,
                 date: Date(timeIntervalSince1970: 1_700_000_100),
@@ -142,10 +163,12 @@ struct ScreenshotBookkeepingTests {
                 note: "手工核对",
                 formType: .expense,
                 recognitionConfidence: result.aiDraft.confidence,
-                sourceImageId: result.sourceImageId
+                sourceImageId: result.sourceImageId,
+                confirmationToken: UUID()
             ),
             userId: env.userId
         )
+        let tx = outcome.transaction
 
         #expect(tx.amount.amount == Decimal(string: "40.00"))
         #expect(tx.merchant == "用户修改商户")
@@ -168,11 +191,11 @@ struct ScreenshotBookkeepingTests {
         )
         try await seedUserAndAccounts(container: env.container, userId: env.userId, accounts: [cash])
 
-        let result = try await env.service.recognize(imageData: sampleImage, userId: env.userId)
+        let result = try await acceptRecognition(env.service, imageData: sampleImage, userId: env.userId)
         let accountId = try await env.service.defaultAccountId(for: result.editableDraft, userId: env.userId)
         #expect(accountId == cash.id)
 
-        let tx = try await env.service.confirm(
+        let outcome = try await env.service.confirm(
             ConfirmScreenshotTransactionInput(
                 amount: result.editableDraft.amount!,
                 date: result.editableDraft.date ?? Date(),
@@ -181,10 +204,12 @@ struct ScreenshotBookkeepingTests {
                 accountId: cash.id,
                 formType: .expense,
                 recognitionConfidence: result.editableDraft.confidence,
-                sourceImageId: result.sourceImageId
+                sourceImageId: result.sourceImageId,
+                confirmationToken: UUID()
             ),
             userId: env.userId
         )
+        let tx = outcome.transaction
 
         let txs = try await env.container.transactions.fetchAll(userId: env.userId)
         #expect(txs.count == 1)
@@ -198,7 +223,7 @@ struct ScreenshotBookkeepingTests {
     func resolveSuggestedAccount() async throws {
         let env = makeService(behavior: .success)
         try await seedUserAndAccounts(container: env.container, userId: env.userId, accounts: [env.wechat, env.cash])
-        let result = try await env.service.recognize(imageData: sampleImage, userId: env.userId)
+        let result = try await acceptRecognition(env.service, imageData: sampleImage, userId: env.userId)
         let resolved = try await env.service.defaultAccountId(for: result.aiDraft, userId: env.userId)
         #expect(resolved == env.wechat.id)
     }

@@ -23,7 +23,8 @@ public enum BackupRestoreCandidateBuilder {
             suspectedDebts: [],
             aiDataConsents: [],
             aiRecognitionRecords: [],
-            mediaArtifacts: []
+            mediaArtifacts: [],
+            confirmedImportProvenances: []
         )
     }
 

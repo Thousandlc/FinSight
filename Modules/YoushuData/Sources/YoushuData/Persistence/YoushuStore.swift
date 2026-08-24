@@ -144,6 +144,7 @@ public actor YoushuStore {
         snapshot.aiDataConsents.removeAll { $0.userId == id }
         snapshot.aiRecognitionRecords.removeAll { $0.userId == id }
         snapshot.mediaArtifacts.removeAll { $0.userId == id }
+        snapshot.confirmedImportProvenances.removeAll { $0.userId == id }
         try persistLocked()
     }
 
@@ -208,6 +209,7 @@ public actor YoushuStore {
 
     public func deleteTransaction(id: UUID) throws {
         snapshot.transactions.removeAll { $0.id == id }
+        removeConfirmedImportEntityReference(.transaction(id))
         try persistLocked()
     }
 
@@ -241,6 +243,7 @@ public actor YoushuStore {
             copy.updatedAt = Date()
             return copy
         }
+        removeConfirmedImportEntityReference(.debt(id))
         try persistLocked()
     }
 
@@ -501,6 +504,97 @@ public actor YoushuStore {
         try persistLocked()
     }
 
+    // MARK: - ConfirmedImportProvenance
+
+    public func upsertConfirmedImportProvenance(_ provenance: ConfirmedImportProvenance) throws -> ConfirmedImportProvenance {
+        try requireUser(provenance.userId)
+        let matches = snapshot.confirmedImportProvenances.enumerated().filter {
+            $0.element.userId == provenance.userId
+                && $0.element.capability == provenance.capability
+                && $0.element.operationFingerprint == provenance.operationFingerprint
+        }
+
+        if matches.isEmpty {
+            snapshot.confirmedImportProvenances.append(provenance)
+            try persistLocked()
+            return provenance
+        }
+
+        let existing = matches[0].element
+        guard existing.capability == provenance.capability,
+              existing.sourceFingerprints == provenance.sourceFingerprints,
+              existing.operationFingerprint == provenance.operationFingerprint else {
+            throw DataError.invalidRelation("Confirmed import provenance integrity mismatch for logical key")
+        }
+
+        var mergedReferences = existing.confirmedEntityReferences
+        for reference in provenance.confirmedEntityReferences where !mergedReferences.contains(reference) {
+            mergedReferences.append(reference)
+        }
+        let merged = try ConfirmedImportProvenance(
+            id: existing.id,
+            userId: existing.userId,
+            capability: existing.capability,
+            sourceFingerprints: existing.sourceFingerprints,
+            confirmedEntityReferences: mergedReferences,
+            confirmedAt: min(existing.confirmedAt, provenance.confirmedAt)
+        )
+
+        if matches.count > 1 {
+            let duplicateIndices = matches.dropFirst().map(\.offset).sorted(by: >)
+            for index in duplicateIndices {
+                snapshot.confirmedImportProvenances.remove(at: index)
+            }
+        }
+        upsert(&snapshot.confirmedImportProvenances, merged)
+        try persistLocked()
+        return merged
+    }
+
+    public func fetchConfirmedImportProvenance(id: UUID) -> ConfirmedImportProvenance? {
+        snapshot.confirmedImportProvenances.first { $0.id == id }
+    }
+
+    public func fetchConfirmedImportProvenance(
+        userId: UUID,
+        capability: ConfirmedImportCapability,
+        operationFingerprint: ImportOperationFingerprint
+    ) -> ConfirmedImportProvenance? {
+        snapshot.confirmedImportProvenances.first {
+            $0.userId == userId
+                && $0.capability == capability
+                && $0.operationFingerprint == operationFingerprint
+        }
+    }
+
+    public func fetchConfirmedImportProvenances(userId: UUID) -> [ConfirmedImportProvenance] {
+        snapshot.confirmedImportProvenances.filter { $0.userId == userId }
+    }
+
+    public func removeConfirmedImportEntityReference(
+        userId: UUID,
+        reference: ConfirmedImportEntityReference
+    ) throws {
+        var updated: [ConfirmedImportProvenance] = []
+        updated.reserveCapacity(snapshot.confirmedImportProvenances.count)
+        for provenance in snapshot.confirmedImportProvenances {
+            guard provenance.userId == userId else {
+                updated.append(provenance)
+                continue
+            }
+            if let remaining = provenance.removingConfirmedEntity(reference) {
+                updated.append(remaining)
+            }
+        }
+        snapshot.confirmedImportProvenances = updated
+        try persistLocked()
+    }
+
+    public func deleteConfirmedImportProvenances(userId: UUID) throws {
+        snapshot.confirmedImportProvenances.removeAll { $0.userId == userId }
+        try persistLocked()
+    }
+
     // MARK: - Persistence
 
     public func reloadFromDisk() throws {
@@ -518,7 +612,7 @@ public actor YoushuStore {
         }
         snapshot = loaded
         if snapshot.schemaVersion < YoushuSnapshot.currentSchemaVersion {
-            // v1→v2: pending/suspected；v2→v3: consent/recognition/media 缺省空数组；v3→v4: debt inventory establishment 默认 unestablished。
+            // v1→v2: pending/suspected；v2→v3: consent/recognition/media 缺省空数组；v3→v4: debt inventory establishment 默认 unestablished；v4→v5: confirmedImportProvenances 缺省空数组。
             snapshot.schemaVersion = YoushuSnapshot.currentSchemaVersion
             try persistLocked()
             YoushuLog.data.info("Migrated snapshot to schema=\(snapshot.schemaVersion)")
@@ -576,6 +670,12 @@ public actor YoushuStore {
         }
 
         throw verificationFailure
+    }
+
+    private func removeConfirmedImportEntityReference(_ reference: ConfirmedImportEntityReference) {
+        snapshot.confirmedImportProvenances = snapshot.confirmedImportProvenances.compactMap {
+            $0.removingConfirmedEntity(reference)
+        }
     }
 
     private func requireUser(_ userId: UUID) throws {

@@ -516,7 +516,7 @@ public struct PreviewAccountRepository: AccountRepository {
 
 public struct PreviewTransactionManaging: TransactionManaging {
     public init() {}
-    public func record(_ input: RecordTransactionInput, userId: UUID) async throws -> Transaction {
+    public func record(_ input: RecordTransactionInput, userId: UUID) async throws -> RecordTransactionOutcome {
         _ = input; _ = userId
         throw DomainError.validationFailed("preview only")
     }

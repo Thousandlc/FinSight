@@ -229,6 +229,41 @@ struct CashFlowEngineTests {
         #expect(text.contains("信用卡") || text.contains("还款"))
     }
 
+    @Test("known due date with unknown payment amounts does not invent a zero outflow")
+    func unknownDebtPaymentAmountIsNotProjectedAsZero() {
+        let userId = UUID()
+        let account = Account(
+            userId: userId,
+            name: "银行",
+            type: .bankCard,
+            openingBalance: Money(amount: 5_000, currencyCode: "CNY")
+        )
+        let asOf = date(2024, 9, 1)
+        let debt = Debt(
+            userId: userId,
+            lender: "信用卡",
+            outstandingBalance: Money(amount: 10_000, currencyCode: "CNY"),
+            dueDate: date(2024, 9, 18),
+            status: .active
+        )
+
+        let projection = CashFlowEngine.project(
+            .init(
+                accounts: [account],
+                transactions: [],
+                debts: [debt],
+                asOf: asOf,
+                horizonDays: 30,
+                calendar: calendar,
+                safeBalance: Money(amount: 2_000, currencyCode: "CNY")
+            )
+        )
+
+        #expect(projection.drivers.contains { $0.kind == .debtRepayment } == false)
+        #expect(projection.peakRepayment == nil)
+        #expect(projection.endingBalance.amount == 5_000)
+    }
+
     @Test("fixed recurring expense is scheduled on future dates")
     func fixedExpense() {
         let userId = UUID()

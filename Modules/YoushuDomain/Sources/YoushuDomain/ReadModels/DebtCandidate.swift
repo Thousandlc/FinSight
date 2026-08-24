@@ -86,31 +86,187 @@ public struct DebtCandidate: Identifiable, Sendable, Hashable, Codable, Equatabl
     }
 }
 
-/// 扫描阶段结果：候选已聚合，但仍非正式 Debt。
-public struct DebtScanResult: Sendable, Equatable {
+/// Provider 扫描完成、Application 接受前的暂态结果（ADR-036 Step C）。
+/// 不表示 MediaArtifact / AIRecognitionRecord 已持久化。
+public struct PendingDebtScanResult: Sendable, Equatable {
+    public let acceptanceToken: UUID
     public var candidates: [DebtCandidate]
     public var warnings: [String]
     public var documentCount: Int
+    public let documents: [BillDocument]
+    public let importIdentity: DebtScanImportIdentity
 
-    public init(candidates: [DebtCandidate], warnings: [String] = [], documentCount: Int) {
+    public init(
+        acceptanceToken: UUID = UUID(),
+        candidates: [DebtCandidate],
+        warnings: [String] = [],
+        documentCount: Int,
+        documents: [BillDocument],
+        importIdentity: DebtScanImportIdentity
+    ) {
+        self.acceptanceToken = acceptanceToken
         self.candidates = candidates
         self.warnings = warnings
         self.documentCount = documentCount
+        self.documents = documents
+        self.importIdentity = importIdentity
+    }
+}
+
+/// Application 接受后进入审核流程的扫描结果；此时 eligible 元数据已持久化。
+public struct DebtScanResult: Sendable, Equatable {
+    public let acceptanceToken: UUID
+    public var candidates: [DebtCandidate]
+    public var warnings: [String]
+    public var documentCount: Int
+    public let importIdentity: DebtScanImportIdentity
+
+    public init(
+        acceptanceToken: UUID,
+        candidates: [DebtCandidate],
+        warnings: [String] = [],
+        documentCount: Int,
+        importIdentity: DebtScanImportIdentity
+    ) {
+        self.acceptanceToken = acceptanceToken
+        self.candidates = candidates
+        self.warnings = warnings
+        self.documentCount = documentCount
+        self.importIdentity = importIdentity
     }
 }
 
 /// 用户确认页上的可编辑候选（与 AI 原始结果分离）。
+public enum ReviewConfirmationState: Equatable, Sendable {
+    case unresolved
+    case confirmed(debtId: UUID)
+    case failed(message: String)
+}
+
+public struct ConfirmDebtCandidateInput: Sendable, Equatable {
+    public var reviewItemId: UUID
+    public var confirmationToken: UUID
+    public var candidate: DebtCandidate
+
+    public init(reviewItemId: UUID, confirmationToken: UUID, candidate: DebtCandidate) {
+        self.reviewItemId = reviewItemId
+        self.confirmationToken = confirmationToken
+        self.candidate = candidate
+    }
+}
+
+public enum DebtScanCandidateConfirmStatus: String, Sendable, Equatable, Codable {
+    case succeeded
+    case failed
+    case notAttempted
+}
+
+public struct DebtScanCandidateConfirmResult: Sendable, Equatable {
+    public var reviewItemId: UUID
+    public var confirmationToken: UUID
+    public var status: DebtScanCandidateConfirmStatus
+    public var debtId: UUID?
+    public var errorMessage: String?
+
+    public init(
+        reviewItemId: UUID,
+        confirmationToken: UUID,
+        status: DebtScanCandidateConfirmStatus,
+        debtId: UUID? = nil,
+        errorMessage: String? = nil
+    ) {
+        self.reviewItemId = reviewItemId
+        self.confirmationToken = confirmationToken
+        self.status = status
+        self.debtId = debtId
+        self.errorMessage = errorMessage
+    }
+}
+
+public struct DebtScanConfirmOutcome: Sendable, Equatable {
+    public var results: [DebtScanCandidateConfirmResult]
+    public var provenanceIssue: String?
+
+    public init(results: [DebtScanCandidateConfirmResult], provenanceIssue: String? = nil) {
+        self.results = results
+        self.provenanceIssue = provenanceIssue
+    }
+
+    public var succeeded: [DebtScanCandidateConfirmResult] {
+        results.filter { $0.status == .succeeded }
+    }
+
+    public var failed: [DebtScanCandidateConfirmResult] {
+        results.filter { $0.status == .failed }
+    }
+
+    public var notAttempted: [DebtScanCandidateConfirmResult] {
+        results.filter { $0.status == .notAttempted }
+    }
+
+    public var isFullySuccessful: Bool {
+        !results.isEmpty && results.allSatisfy { $0.status == .succeeded }
+    }
+
+    public var hasPartialSuccess: Bool {
+        succeeded.count > 0 && !isFullySuccessful
+    }
+}
+
 public struct ReviewableDebtCandidate: Identifiable, Sendable, Equatable {
     public var id: UUID
     public var aiCandidate: DebtCandidate
     public var editable: DebtCandidate
     public var isIgnored: Bool
+    public var confirmationToken: UUID
+    public var confirmationState: ReviewConfirmationState
 
     public init(from candidate: DebtCandidate) {
         self.id = candidate.id
         self.aiCandidate = candidate
         self.editable = candidate
         self.isIgnored = false
+        self.confirmationToken = UUID()
+        self.confirmationState = .unresolved
+    }
+
+    public var isConfirmable: Bool {
+        guard !isIgnored else { return false }
+        if case .confirmed = confirmationState { return false }
+        return true
+    }
+}
+
+/// Edit-state mapping for a DebtCandidate. Unknown optional facts stay unknown
+/// unless the user explicitly supplies them (for example enabling due date).
+public struct DebtCandidateEditDraft: Equatable, Sendable {
+    public var candidate: DebtCandidate
+    public var includeDueDate: Bool
+
+    public init(from candidate: DebtCandidate) {
+        self.candidate = candidate
+        self.includeDueDate = candidate.dueDate != nil
+    }
+
+    /// Explicit user action: enable or clear due date. Enabling with a nil date
+    /// uses `explicitDate` as the newly chosen value.
+    public mutating func setIncludeDueDate(_ include: Bool, explicitDate: Date) {
+        includeDueDate = include
+        if include {
+            if candidate.dueDate == nil {
+                candidate.dueDate = explicitDate
+            }
+        } else {
+            candidate.dueDate = nil
+        }
+    }
+
+    public func finalized() -> DebtCandidate {
+        var result = candidate
+        if !includeDueDate {
+            result.dueDate = nil
+        }
+        return result
     }
 }
 

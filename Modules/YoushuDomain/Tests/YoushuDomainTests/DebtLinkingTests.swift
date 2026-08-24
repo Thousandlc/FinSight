@@ -474,7 +474,7 @@ struct TransactionDebtLinkingTests {
                 formType: .expense
             ),
             userId: env.userId
-        )
+        ).transaction
         #expect(tx.relatedDebtId == nil)
         let refreshed = try await env.container.debts.fetch(id: debt.id)
         #expect(refreshed?.outstandingBalance?.amount == 9000)

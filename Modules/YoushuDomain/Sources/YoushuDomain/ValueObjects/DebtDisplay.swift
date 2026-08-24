@@ -1,4 +1,5 @@
 import Foundation
+import YoushuFoundation
 
 extension DebtType {
     /// MVP 可选类型：信用卡 / 消费信贷 / 消费分期 / 银行贷款 / 个人借款
@@ -94,5 +95,123 @@ extension PaymentFrequency {
         case .yearly: return 12
         case .irregular, .unknown: return 1
         }
+    }
+}
+
+/// Presentation mapping for optional Debt money facts.
+/// Unknown (`nil`) is not a known-zero amount.
+/// A known-only subtotal is not a complete total.
+public enum DebtMoneyPresentation: Equatable, Sendable {
+    public static let unknownPlaceholder = "—"
+    public static let incompleteCaption = "部分金额未知"
+
+    case unknown
+    case known(Money)
+    case knownIncomplete(Money)
+
+    public init(_ money: Money?) {
+        if let money {
+            self = .known(money)
+        } else {
+            self = .unknown
+        }
+    }
+
+    public init(amount: Money, availability: FieldAvailability) {
+        switch availability {
+        case .missing, .notApplicable:
+            self = .unknown
+        case .partial:
+            self = .knownIncomplete(amount)
+        case .known:
+            self = .known(amount)
+        }
+    }
+
+    public var isUnknown: Bool {
+        if case .unknown = self { return true }
+        return false
+    }
+
+    public var isComplete: Bool {
+        if case .known = self { return true }
+        return false
+    }
+
+    public var availability: FieldAvailability {
+        switch self {
+        case .unknown: return .missing
+        case .known: return .known
+        case .knownIncomplete: return .partial
+        }
+    }
+
+    public var knownAmount: Money? {
+        switch self {
+        case .unknown: return nil
+        case .known(let money), .knownIncomplete(let money): return money
+        }
+    }
+
+    public var caption: String? {
+        if case .knownIncomplete = self { return Self.incompleteCaption }
+        return nil
+    }
+
+    public func text(formatted: (Money) -> String) -> String {
+        switch self {
+        case .unknown:
+            return Self.unknownPlaceholder
+        case .known(let money), .knownIncomplete(let money):
+            return formatted(money)
+        }
+    }
+
+    /// Sum of **known** outstanding balances for open debts.
+    /// All-unknown open balances stay unknown. Mixed inventories are incomplete
+    /// subtotals — not a complete total. An empty open set uses `computed`.
+    public static func knownOutstandingTotal(from debts: [Debt], computed: Money) -> DebtMoneyPresentation {
+        let open = debts.filter { DebtCenterCalculator.isOpen($0) }
+        if open.isEmpty {
+            return .known(computed)
+        }
+        let knownCount = open.filter { $0.outstandingBalance != nil }.count
+        if knownCount == 0 {
+            return .unknown
+        }
+        if knownCount == open.count {
+            return .known(computed)
+        }
+        return .knownIncomplete(computed)
+    }
+
+    /// Estimated monthly repayment from known installment / currentDue / minimumDue.
+    /// No usable known payment facts stay unknown — not a fabricated ¥0.
+    public static func estimatedMonthly(from debts: [Debt]) -> DebtMoneyPresentation {
+        let open = debts.filter { DebtCenterCalculator.isOpen($0) }
+        if open.isEmpty {
+            return .known(.zeroCNY)
+        }
+
+        var known: [Money] = []
+        var unknownCount = 0
+        for debt in open {
+            if let monthly = DebtCenterCalculator.monthlyAmount(for: debt) {
+                known.append(monthly)
+            } else {
+                unknownCount += 1
+            }
+        }
+
+        guard let currency = known.first?.currencyCode else {
+            return .unknown
+        }
+        let sum = known
+            .filter { $0.currencyCode == currency }
+            .reduce(Money(amount: 0, currencyCode: currency), +)
+        if unknownCount == 0 {
+            return .known(sum)
+        }
+        return .knownIncomplete(sum)
     }
 }

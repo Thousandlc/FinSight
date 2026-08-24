@@ -34,19 +34,29 @@ public struct AppRootView: View {
             await homeVM.load()
             await accountVM.load()
         })
-        let screenshotVM = dependencies.makeScreenshotBookkeepingViewModel(onSaved: {
-            await transactionVM.load()
-            await homeVM.load()
-            await accountVM.load()
-        })
+        let screenshotVM = dependencies.makeScreenshotBookkeepingViewModel(
+            onSaved: {
+                await transactionVM.load()
+                await homeVM.load()
+                await accountVM.load()
+            },
+            onViewExistingTransaction: { transactionId in
+                await transactionVM.openTransactionForEditing(transactionId: transactionId)
+            }
+        )
         let debtVM = dependencies.makeDebtViewModel(onDataChanged: {
             await homeVM.load()
             await accountVM.load()
         })
-        let debtScannerVM = dependencies.makeDebtScannerViewModel(onCompleted: {
-            await debtVM.load()
-            await homeVM.load()
-        })
+        let debtScannerVM = dependencies.makeDebtScannerViewModel(
+            onCompleted: {
+                await debtVM.load()
+                await homeVM.load()
+            },
+            onViewExistingDebt: { debtId in
+                await debtVM.openDebtDetail(debtId: debtId)
+            }
+        )
         let refreshViewModels = ApplicationRestoreRefresh.ViewModels(
             home: homeVM,
             transaction: transactionVM,

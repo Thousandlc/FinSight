@@ -60,6 +60,28 @@ public final class TransactionViewModel {
         isPresentingScreenshotBookkeeping = true
     }
 
+    public func openTransactionForEditing(transactionId: UUID) async {
+        isPresentingScreenshotBookkeeping = false
+        if let item = findItem(transactionId: transactionId) {
+            presentEdit(item)
+            return
+        }
+        await load()
+        if let item = findItem(transactionId: transactionId) {
+            presentEdit(item)
+        }
+    }
+
+    private func findItem(transactionId: UUID) -> TransactionListItem? {
+        guard case .content(let snapshot) = phase else { return nil }
+        for section in snapshot.sections {
+            if let item = section.items.first(where: { $0.transaction.id == transactionId }) {
+                return item
+            }
+        }
+        return nil
+    }
+
     public func presentEdit(_ item: TransactionListItem) {
         editingItem = item
         formError = nil
@@ -133,7 +155,7 @@ public final class TransactionViewModel {
                     formType: draft.formType
                 ),
                 userId: userId
-            )
+            ).transaction
         }
     }
 

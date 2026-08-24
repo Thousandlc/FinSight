@@ -37,7 +37,7 @@ struct TransactionServiceTests {
                 formType: .expense
             ),
             userId: userId
-        )
+        ).transaction
 
         #expect(tx.transactionType == .expense)
         #expect(tx.amount.amount == Decimal(string: "128.50")!)
@@ -59,7 +59,7 @@ struct TransactionServiceTests {
                 formType: .income
             ),
             userId: userId
-        )
+        ).transaction
 
         #expect(tx.transactionType == .income)
         #expect(tx.category == "工资")
@@ -97,7 +97,7 @@ struct TransactionServiceTests {
         let created = try await service.record(
             RecordTransactionInput(amount: 50, category: "交通", accountId: cash.id, formType: .expense),
             userId: userId
-        )
+        ).transaction
 
         let updated = try await service.update(
             UpdateTransactionInput(
@@ -125,7 +125,7 @@ struct TransactionServiceTests {
         let created = try await service.record(
             RecordTransactionInput(amount: 10, category: "其他", accountId: cash.id, formType: .expense),
             userId: userId
-        )
+        ).transaction
         try await service.delete(transactionId: created.id, userId: userId)
         #expect(try await container.transactions.fetch(id: created.id) == nil)
     }

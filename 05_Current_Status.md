@@ -2,7 +2,7 @@
 
 > 文档角色：项目当前存档点 / 新 Chat 恢复入口  
 > 版本：v1.0
-> **Last Updated：2026-08-21（Privacy & AI Settings Closure / ADR-034 Context Sync）**
+> **Last Updated：2026-08-22（Production Observability & Error Taxonomy Closure / ADR-035 Context Sync）**
 > 本文件应频繁更新；旧状态不应无限累积，重大历史移入 Decision Log。
 
 ---
@@ -92,7 +92,8 @@ Modules/Package.swift
 
 - 仓库 remote：`Thousandlc/FinSight`（private）
 - Apple-only integration gate：GitHub Actions `ios-apple-gate.yml`（`workflow_dispatch`, `macos-15`）
-- 当前 Apple Privacy & AI Settings Closure gate：**green**（run **32470000762**, HEAD `b5a199cf87e12b3ebfcf1a2de2bf94e8f2329702`, Xcode **16.4**）
+- 当前 Apple Production Observability gate：**green**（run **32555839840**, HEAD `385647b5c1d4959d449d182f66ec3845d7a548b2`, Xcode **16.4 (16F6)**）
+- 历史 Apple Privacy & AI Settings Closure gate：green（run **32470000762**, HEAD `b5a199cf87e12b3ebfcf1a2de2bf94e8f2329702`, Xcode **16.4**）— **不再是当前基线**
 - 历史 Apple Backup/Restore gate：green（run **32443787799**, HEAD `967c0c5`, Xcode **16.4**）— **不再是当前基线**
 
 历史代码模块：
@@ -554,6 +555,30 @@ production requires GATEWAY_CLIENT_TOKEN
 
 该历史故障应保留在运维知识中，但不代表当前服务仍失败。
 
+### Production Observability & Error Taxonomy — IMPLEMENTED / VERIFIED（2026-08-22，ADR-035）
+
+```text
+Status: IMPLEMENTED / VERIFIED — 2026-08-22
+ADR:    ADR-035
+```
+
+核心能力：
+
+- privacy-safe allowlisted telemetry（local structured sinks only）
+- Swift + Go shared error taxonomy（`contracts/observability_taxonomy_defaults.json`）
+- `requestId` correlation（`X-Youshu-Request-Id`；iOS retry 保持同一 logical id）
+- Gateway 每 HTTP attempt 一条 `event=ai_request` terminal event
+- iOS lifecycle observability（consent / requestSerialization / clientTransport / clientResponseDecode / assistantValidation / insightPersistence）
+- Validator / persistence failure taxonomy
+- Home optional AI / cache-write failure → `outcome=degraded`（ADR-020 / ADR-032 澄清）
+- token usage：Gateway 在 Bailian 实际返回时记录；iOS 不重复
+- **cost 缺席**（无价格表 / 估算成本）
+- remote production log aggregation / dashboard：**未实现**
+
+Observability **不是**新的 Consent 或 AI 数据传输通道。sink 失败不得拖垮 AI/业务操作。
+
+ADR-035 **不表示** public Gateway production-ready、真实 Bailian production smoke 已完成、或 ICP 约束解除。
+
 ---
 
 ## 14. ICP 备案当前硬约束
@@ -615,45 +640,83 @@ RemoteFinancialAIProvider
 
 ## 16. 测试状态
 
-### 2026-08-21 Privacy & AI Settings Closure Step 6 / Step 7A — 当前实测基线
+### 2026-08-22 Recognition Quality & Import Reliability — 当前实测基线
 
-以下数字来自 **2026-08-21 Privacy & AI Settings Closure final verification**（Windows + Apple 两个 platform gates）。
+以下数字来自 **Recognition Quality & Import Reliability Steps 1–4A** closure verification（Windows gate；Apple gate for latest candidate **NOT RUN**）。
 
 ```text
-Windows 556 and Apple 521 are separate platform gates.
+Foundation:  30 PASS
+Domain:     436 PASS
+Data:       102 PASS
+AI:         109 PASS
+Total:      677 PASS
+Failed:       0
+```
+
+**Recognition Import Provenance:** ADR-036 **ACCEPTED — IMPLEMENTATION PENDING**（Step 4C docs-only；无 production 变更）。
+
+| Milestone | Status |
+|-----------|--------|
+| Recognition Evaluation Infrastructure | **ESTABLISHED** (Step 2) |
+| Real recognition accuracy baseline | **NOT ESTABLISHED** |
+| Production pixel-reading recognizer | **NOT IMPLEMENTED** (`MockAIProvider`) |
+| Transaction same-flow import reliability | **CLOSED** (Step 3) |
+| Debt same-flow lifecycle/confirmation reliability | **CLOSED** (Step 4A) |
+| Cross-session exact-source provenance | **IMPLEMENTATION PENDING** (ADR-036) |
+| Per-image Provider partial outcomes | **INTENTIONALLY DEFERRED** (ADR-036) |
+| Latest Recognition candidate Apple gate | **NOT RUN** |
+
+### 2026-08-22 Production Observability & Error Taxonomy — 历史基线（ADR-035 验证轮次）
+
+以下数字来自 **2026-08-22 Production Observability final verification**（Windows + Apple 两个 platform gates）。
+**已被 Recognition & Import Reliability 工作抬升至 677（Domain +37 / AI +30 等）；下列 610 不再是 Import/Recognition 当前基线。**
+
+```text
+Windows 610 and Apple 537 are separate platform gates.
 Do not add them as unique tests.
 ```
 
 **Windows gate**（`scripts/test-windows.bat` + `swift build -c release`）：
 
 ```text
-Foundation:  10 PASS
-Domain:     385 PASS
-Data:       100 PASS
-AI:          61 PASS
-Total:      556 PASS
+Foundation:  30 PASS
+Domain:     399 PASS
+Data:       102 PASS
+AI:          79 PASS
+Total:      610 PASS
 Failed:       0
 
 swift build -c release:
 PASS
 ```
 
-HEAD：`b5a199cf87e12b3ebfcf1a2de2bf94e8f2329702`
+HEAD：`385647b5c1d4959d449d182f66ec3845d7a548b2`
 
-**Apple gate**（GitHub Actions run **32470000762**, HEAD `b5a199cf87e12b3ebfcf1a2de2bf94e8f2329702`, Xcode **16.4**, iOS Simulator）：
+**Apple gate**（GitHub Actions `ios-apple-gate.yml` run **32555839840**, HEAD `385647b5c1d4959d449d182f66ec3845d7a548b2`, Xcode **16.4 (16F6)**, iOS Simulator）：
 
 ```text
 YoushuUITests:       36 PASS
-YoushuDataTests:    100 PASS
-YoushuDomainTests:  385 PASS
-Total:              521 PASS
+YoushuDataTests:    102 PASS
+YoushuDomainTests:  399 PASS
+Total:              537 PASS
 Failed:                0
 ```
 
-Gateway tests：
+Gateway：
 
 ```text
-NOT rerun for Privacy & AI Settings Closure because Gateway code/contracts were unchanged.
+go test ./... PASS
+go build ./... PASS
+```
+
+### 2026-08-21 Privacy & AI Settings Closure — 历史基线（归档）
+
+以下数字来自 **2026-08-21 Privacy & AI Settings Closure final verification**（run **32470000762**, HEAD `b5a199cf87e12b3ebfcf1a2de2bf94e8f2329702`）。
+**不再是当前基线。**
+
+```text
+Windows: Foundation 10 / Domain 385 / Data 100 / AI 61 / Total 556 PASS
+Apple:   YoushuUITests 36 / YoushuDataTests 100 / YoushuDomainTests 385 / Total 521 PASS
 ```
 
 ### 2026-08-21 Backup / Restore v1 — 历史基线（归档）
@@ -732,7 +795,7 @@ Domain 309 / Data 6 / AI 61 / Total 376
 Domain 314 / Data 6 / AI 61 / Total 381
 ```
 
-上述 **138 / 376 / 381 / 385 / 427 / 532 / 471** 等旧数字 **不再是当前基线**（当前为 Windows **556** / Apple **521**）。
+上述 **138 / 376 / 381 / 385 / 427 / 532 / 471 / 556 / 521** 等旧数字 **不再是当前基线**（当前为 Windows **610** / Apple **537**）。
 
 典型一致性：
 
@@ -911,8 +974,8 @@ Trust 与 Freshness / Consent 是 **三个独立维度**（见 §18.2）。
 5. **automatic / cloud backup — STILL OPEN**
 6. **CloudKit / live multi-device sync — STILL OPEN**
 7. **physical-device Files smoke — NOT RUN**（pre-release manual gate；见 §17.1）
-8. **Production observability 不完整**
-9. **Token / cost telemetry 尚未完全接 production**
+8. **remote production log aggregation / dashboards not implemented**
+9. **cost telemetry absent**（token usage 仅 Gateway 在 Bailian 实际返回时记录；无价格表 / 估算成本）
 10. **真实图片识别准确率缺少稳定 baseline**
 11. **大数据量 JSON Store 性能未压测**
 
@@ -922,6 +985,41 @@ Trust 与 Freshness / Consent 是 **三个独立维度**（见 §18.2）。
 13. **`Subscription` store/Backup representation without `RepositoryContainer` wiring**（wipe 已通过 `YoushuStore.deleteUser` 覆盖）
 
 Do not promote these P2 items to P0/P1 without evidence.
+
+### RESOLVED / CLOSED（2026-08-22 — Recognition Import Provenance architecture / ADR-036）
+
+```text
+Recognition Import Provenance architecture formalized
+— ACCEPTED 2026-08-22 — NOT YET IMPLEMENTED
+```
+
+Documented (Step 4C — docs only):
+
+- `ConfirmedImportProvenance` target model separate from `MediaArtifact` / `AIRecognitionRecord`
+- Full-file SHA-256 local fingerprints; batch identity order-insensitive / multiplicity-sensitive
+- Transaction warn+allow; Debt prior-scan signal (not hard duplicate block)
+- Provenance only after confirmed fact persist; metadata write-after-Application-acceptance target
+- Backup v1 unchanged; provenance excluded from portable backup
+- Per-image Provider semantics deferred until real pixel-reading recognizer
+
+**Not closed:** implementation, cross-session dedup UX, RQ-06 per-image Provider contract.
+
+### RESOLVED / CLOSED（2026-08-22 — Production Observability & Error Taxonomy / ADR-035）
+
+```text
+Production Observability & Error Taxonomy
+— VERIFIED 2026-08-22
+```
+
+CLOSED：
+
+- Production observability 不完整
+- Token / cost telemetry 尚未完全接 production（token usage 已在 Gateway 落地；**cost 仍缺席**，不是未完成的 production wiring）
+
+Remaining accurate telemetry semantics（仍开放，但不是 “Production Observability incomplete”）：
+
+- remote production log aggregation / dashboards not implemented
+- cost telemetry absent
 
 ### RESOLVED / CLOSED（2026-08-21 — Privacy & AI Settings Closure / ADR-034）
 
@@ -967,8 +1065,8 @@ CLOSED：
 2. 清理 legacy naming，但只做安全、可测试的部分。
 3. 完成本地 / Gateway unit tests。
 4. 强化 Provider schema tests。
-5. 完成 error taxonomy。
-6. 完成 observability 设计与本地验证。
+5. ~~完成 error taxonomy。~~ **已完成（ADR-035，2026-08-22）。**
+6. ~~完成 observability 设计与本地验证。~~ **已完成（ADR-035，2026-08-22）；remote aggregation / cost telemetry 仍不在范围内。**
 7. 修复 remote-AI-to-Home 的耦合架构。
 8. ~~建立 Backup / Export 方案。~~ **Backup v1 已实现（ADR-033）；Export / cloud backup 仍开放。**
 9. ~~补 Consent / Privacy UI。~~ **Privacy & AI Settings Closure 已完成（2026-08-21）；不再重建。**
@@ -1032,6 +1130,8 @@ domain / DNS
 - 数据存储迁移
 - Backup / Restore v1 实现与 verification 完成（ADR-033）
 - Privacy & AI Settings Closure / ADR-034 完成（2026-08-21）
+- Production Observability & Error Taxonomy Closure / ADR-035 完成（2026-08-22）
+- Recognition Import Provenance architecture / ADR-036 accepted（2026-08-22 — implementation pending）
 - 模块 rename
 - 大 milestone 完成
 - 全量测试数字发生显著变化
@@ -1042,4 +1142,4 @@ domain / DNS
 
 ## 22. 当前一句话存档
 
-**截至 2026-08-21，FinSight 的核心财务 Domain、现金流（7/30/60/90）、多债务、Consent、AI Context、Answer Validator、Stored Insight trust boundary（VERIFIED SAFE）、ADR-032 Stored Insight freshness/lifecycle（RESOLVED）、FinancialRiskPolicyEngine（regression-covered）、C2B KeyFact / Gateway materialization、ADR-020 Home AI failure isolation（FIXED）、ADR-033 manual encrypted Backup / full-replace Restore（IMPLEMENTED / APPLE-CI VERIFIED）、以及 Privacy & AI Settings Closure / ADR-034 monotonic local wipe（IMPLEMENTED / VERIFIED）已建立到较成熟的内部 MVP 阶段；Windows 当前基线 **556 tests PASS** + release build PASS；Apple gate **521 tests PASS**（run 32470000762, HEAD `b5a199cf87e12b3ebfcf1a2de2bf94e8f2329702`, Xcode 16.4）；physical-device Files smoke NOT RUN；Gateway ECS 运行态仅保留 2026-08-18 documented snapshot；ICP 备案 pending，公网 HTTPS、iOS production wiring 与真实 Bailian production smoke 仍明确禁止。不把 Windows 556 与 Apple 521 相加为 unique tests。**
+**截至 2026-08-22，FinSight 的核心财务 Domain、现金流（7/30/60/90）、多债务、Consent、AI Context、Answer Validator、Stored Insight trust boundary（VERIFIED SAFE）、ADR-032 Stored Insight freshness/lifecycle（RESOLVED）、FinancialRiskPolicyEngine（regression-covered）、C2B KeyFact / Gateway materialization、ADR-020 Home AI failure isolation（FIXED）、ADR-033 manual encrypted Backup / full-replace Restore（IMPLEMENTED / APPLE-CI VERIFIED）、Privacy & AI Settings Closure / ADR-034 monotonic local wipe（IMPLEMENTED / VERIFIED）、Production Observability & Error Taxonomy / ADR-035（IMPLEMENTED / VERIFIED）、Recognition Quality evaluation infrastructure（ESTABLISHED）、Transaction/Debt same-flow import reliability（CLOSED Steps 3–4A）、以及 ADR-036 Confirmed Import Provenance architecture（ACCEPTED — IMPLEMENTATION PENDING）已建立到较成熟的内部 MVP / Pre-Production Engineering 阶段；Windows Recognition & Import Reliability 当前基线 **677 tests PASS**（Foundation 30 / Domain 436 / Data 102 / AI 109）；ADR-035 验证轮次历史基线 **610** / Apple **537**（run 32555839840）仍归档；**latest Recognition candidate Apple gate NOT RUN**；Gateway `go test ./...` PASS 且 `go build ./...` PASS；physical-device Files smoke NOT RUN；cost telemetry absent；remote log aggregation 未部署；Gateway ECS 运行态仅保留 2026-08-18 documented snapshot；ICP 备案 pending，公网 HTTPS、iOS production wiring 与真实 Bailian production smoke 仍明确禁止。生产图像识别仍为 MockAIProvider；真实识别精度 baseline NOT ESTABLISHED。不把 Windows 677 与历史 Apple 537 相加为 unique tests。**

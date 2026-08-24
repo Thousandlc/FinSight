@@ -7,8 +7,9 @@ import YoushuDomain
 /// - **v1 → v2**: 新增 `pendingDebtLinks`、`suspectedDebts`。
 /// - **v2 → v3**: 新增 `aiDataConsents`、`aiRecognitionRecords`、`mediaArtifacts`（隐私 / 识别审计 / 媒体元数据，默认不含原图二进制）。
 /// - **v3 → v4**: `User.debtInventoryEstablishment` 等债务清单语义字段；迁移默认 `unestablished`（不根据 `debts.count` 推断）。
+/// - **v4 → v5**: 新增 `confirmedImportProvenances`（本地导入溯源元数据，默认空数组）。
 public struct YoushuSnapshot: Codable, Sendable {
-    public static let currentSchemaVersion = 4
+    public static let currentSchemaVersion = 5
 
     public var schemaVersion: Int
     public var users: [User]
@@ -27,6 +28,7 @@ public struct YoushuSnapshot: Codable, Sendable {
     public var aiDataConsents: [AIDataConsent]
     public var aiRecognitionRecords: [AIRecognitionRecord]
     public var mediaArtifacts: [MediaArtifact]
+    public var confirmedImportProvenances: [ConfirmedImportProvenance]
 
     public init(
         schemaVersion: Int = YoushuSnapshot.currentSchemaVersion,
@@ -45,7 +47,8 @@ public struct YoushuSnapshot: Codable, Sendable {
         suspectedDebts: [SuspectedDebt] = [],
         aiDataConsents: [AIDataConsent] = [],
         aiRecognitionRecords: [AIRecognitionRecord] = [],
-        mediaArtifacts: [MediaArtifact] = []
+        mediaArtifacts: [MediaArtifact] = [],
+        confirmedImportProvenances: [ConfirmedImportProvenance] = []
     ) {
         self.schemaVersion = schemaVersion
         self.users = users
@@ -64,6 +67,7 @@ public struct YoushuSnapshot: Codable, Sendable {
         self.aiDataConsents = aiDataConsents
         self.aiRecognitionRecords = aiRecognitionRecords
         self.mediaArtifacts = mediaArtifacts
+        self.confirmedImportProvenances = confirmedImportProvenances
     }
 
     public static var empty: YoushuSnapshot { YoushuSnapshot() }
@@ -73,6 +77,7 @@ public struct YoushuSnapshot: Codable, Sendable {
         case repaymentPlans, budgets, goals, subscriptions, insights
         case pendingDebtLinks, suspectedDebts
         case aiDataConsents, aiRecognitionRecords, mediaArtifacts
+        case confirmedImportProvenances
     }
 
     public init(from decoder: Decoder) throws {
@@ -94,5 +99,9 @@ public struct YoushuSnapshot: Codable, Sendable {
         aiDataConsents = try container.decodeIfPresent([AIDataConsent].self, forKey: .aiDataConsents) ?? []
         aiRecognitionRecords = try container.decodeIfPresent([AIRecognitionRecord].self, forKey: .aiRecognitionRecords) ?? []
         mediaArtifacts = try container.decodeIfPresent([MediaArtifact].self, forKey: .mediaArtifacts) ?? []
+        confirmedImportProvenances = try container.decodeIfPresent(
+            [ConfirmedImportProvenance].self,
+            forKey: .confirmedImportProvenances
+        ) ?? []
     }
 }

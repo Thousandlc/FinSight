@@ -105,6 +105,42 @@ struct OriginalImageRetentionProductionTests {
         return (env, tempRoot)
     }
 
+    private func recognizeScreenshot(
+        _ service: ScreenshotBookkeepingService,
+        imageData: Data,
+        userId: UUID
+    ) async throws -> PendingScreenshotRecognition {
+        let identity = TransactionScreenshotImportIdentity.from(imageData: imageData)
+        return try await service.recognize(imageData: imageData, userId: userId, importIdentity: identity)
+    }
+
+    private func acceptScreenshot(
+        _ service: ScreenshotBookkeepingService,
+        imageData: Data,
+        userId: UUID
+    ) async throws -> ScreenshotRecognitionResult {
+        let pending = try await recognizeScreenshot(service, imageData: imageData, userId: userId)
+        return try await service.acceptRecognition(pending, userId: userId)
+    }
+
+    private func scanDebt(
+        _ service: DebtScannerService,
+        documents: [BillDocument],
+        userId: UUID
+    ) async throws -> PendingDebtScanResult {
+        let identity = DebtScanImportIdentity.from(documents: documents)
+        return try await service.scan(documents: documents, userId: userId, importIdentity: identity)
+    }
+
+    private func acceptDebtScan(
+        _ service: DebtScannerService,
+        documents: [BillDocument],
+        userId: UUID
+    ) async throws -> DebtScanResult {
+        let pending = try await scanDebt(service, documents: documents, userId: userId)
+        return try await service.acceptScan(pending, userId: userId)
+    }
+
     @Test("retain false screenshot leaves no persistent binary after confirm")
     func screenshotRetainFalse() async throws {
         let (env, tempRoot) = try await makeDirectoryEnv()
@@ -113,7 +149,7 @@ struct OriginalImageRetentionProductionTests {
         _ = try await env.consentService.acceptScreenshotPrivacy(userId: env.userId)
         #expect(try await env.consentService.fetchOrDefault(userId: env.userId).retainOriginalImages == false)
 
-        let result = try await env.screenshot.recognize(imageData: sampleImage, userId: env.userId)
+        let result = try await acceptScreenshot(env.screenshot, imageData: sampleImage, userId: env.userId)
         guard let imageId = result.sourceImageId else {
             Issue.record("Expected source image id")
             return
@@ -128,7 +164,8 @@ struct OriginalImageRetentionProductionTests {
                 accountId: env.account.id,
                 formType: .expense,
                 recognitionConfidence: result.aiDraft.confidence,
-                sourceImageId: imageId
+                sourceImageId: imageId,
+                confirmationToken: UUID()
             ),
             userId: env.userId
         )
@@ -145,7 +182,7 @@ struct OriginalImageRetentionProductionTests {
         _ = try await env.consentService.acceptScreenshotPrivacy(userId: env.userId)
         _ = try await env.consentService.setRetainOriginalImages(true, userId: env.userId)
 
-        let result = try await env.screenshot.recognize(imageData: sampleImage, userId: env.userId)
+        let result = try await acceptScreenshot(env.screenshot, imageData: sampleImage, userId: env.userId)
         guard let imageId = result.sourceImageId else {
             Issue.record("Expected source image id")
             return
@@ -160,7 +197,8 @@ struct OriginalImageRetentionProductionTests {
                 accountId: env.account.id,
                 formType: .expense,
                 recognitionConfidence: result.aiDraft.confidence,
-                sourceImageId: imageId
+                sourceImageId: imageId,
+                confirmationToken: UUID()
             ),
             userId: env.userId
         )
@@ -177,11 +215,12 @@ struct OriginalImageRetentionProductionTests {
 
         _ = try await env.consentService.acceptDebtScanPrivacy(userId: env.userId)
         let document = BillDocument(kind: .screenshot, data: billImage, fileName: "bill.png")
-        let scan = try await env.debtScanner.scan(documents: [document], userId: env.userId)
+        let scan = try await acceptDebtScan(env.debtScanner, documents: [document], userId: env.userId)
         #expect(!scan.candidates.isEmpty)
 
         let imageId = MediaLifecyclePolicy.makeImageId(for: billImage)
-        _ = try await env.debtScanner.confirm(candidates: [scan.candidates[0]], userId: env.userId)
+        let outcome = await env.debtScanner.confirm(candidates: [scan.candidates[0]], userId: env.userId)
+        #expect(outcome.isFullySuccessful)
 
         #expect(try await env.binaries?.load(imageId: imageId, userId: env.userId) == nil)
         #expect(try await env.container.mediaArtifacts.fetch(id: imageId) == nil)
@@ -196,9 +235,10 @@ struct OriginalImageRetentionProductionTests {
         _ = try await env.consentService.setRetainOriginalImages(true, userId: env.userId)
 
         let document = BillDocument(kind: .screenshot, data: billImage, fileName: "bill.png")
-        let scan = try await env.debtScanner.scan(documents: [document], userId: env.userId)
+        let scan = try await acceptDebtScan(env.debtScanner, documents: [document], userId: env.userId)
         let imageId = MediaLifecyclePolicy.makeImageId(for: billImage)
-        _ = try await env.debtScanner.confirm(candidates: [scan.candidates[0]], userId: env.userId)
+        let outcome = await env.debtScanner.confirm(candidates: [scan.candidates[0]], userId: env.userId)
+        #expect(outcome.isFullySuccessful)
 
         #expect(try await env.binaries?.load(imageId: imageId, userId: env.userId) == billImage)
         let artifact = try await env.container.mediaArtifacts.fetch(id: imageId)
@@ -214,7 +254,7 @@ struct OriginalImageRetentionProductionTests {
         _ = try await env.consentService.acceptAssistantPrivacy(userId: env.userId)
         _ = try await env.consentService.setRetainOriginalImages(true, userId: env.userId)
 
-        let result = try await env.screenshot.recognize(imageData: sampleImage, userId: env.userId)
+        let result = try await acceptScreenshot(env.screenshot, imageData: sampleImage, userId: env.userId)
         guard let imageId = result.sourceImageId else { return }
 
         let deleted = try await env.retention.disableRetention(userId: env.userId)
@@ -240,7 +280,7 @@ struct OriginalImageRetentionProductionTests {
 
         _ = try await env.consentService.acceptScreenshotPrivacy(userId: env.userId)
         _ = try await env.consentService.setRetainOriginalImages(true, userId: env.userId)
-        let result = try await env.screenshot.recognize(imageData: sampleImage, userId: env.userId)
+        let result = try await acceptScreenshot(env.screenshot, imageData: sampleImage, userId: env.userId)
         guard let imageId = result.sourceImageId else { return }
         await failingStore.setFailDelete(imageId: imageId)
 
@@ -276,7 +316,7 @@ struct OriginalImageRetentionProductionTests {
 
         _ = try await envA.consentService.setRetainOriginalImages(true, userId: envA.userId)
         _ = try await envA.consentService.acceptScreenshotPrivacy(userId: envA.userId)
-        let resultA = try await envA.screenshot.recognize(imageData: sampleImage, userId: envA.userId)
+        let resultA = try await acceptScreenshot(envA.screenshot, imageData: sampleImage, userId: envA.userId)
         guard let imageIdA = resultA.sourceImageId else { return }
 
         let consentB = AIDataConsentService(consents: envA.container.aiDataConsents)
@@ -293,7 +333,7 @@ struct OriginalImageRetentionProductionTests {
             media: envA.media
         )
         let imageB = Data("user-b-image".utf8)
-        let resultB = try await screenshotB.recognize(imageData: imageB, userId: userB)
+        let resultB = try await acceptScreenshot(screenshotB, imageData: imageB, userId: userB)
         guard let imageIdB = resultB.sourceImageId else { return }
 
         _ = try await envA.retention.disableRetention(userId: envA.userId)
@@ -309,7 +349,7 @@ struct OriginalImageRetentionProductionTests {
 
         _ = try await env.consentService.acceptScreenshotPrivacy(userId: env.userId)
         _ = try await env.consentService.setRetainOriginalImages(true, userId: env.userId)
-        let result = try await env.screenshot.recognize(imageData: sampleImage, userId: env.userId)
+        let result = try await acceptScreenshot(env.screenshot, imageData: sampleImage, userId: env.userId)
         guard let imageId = result.sourceImageId else { return }
         #expect(try await env.binaries?.load(imageId: imageId, userId: env.userId) == sampleImage)
 
@@ -339,7 +379,7 @@ struct OriginalImageRetentionProductionTests {
         _ = try await env.consentService.acceptScreenshotPrivacy(userId: env.userId)
         #expect(try await env.consentService.fetchOrDefault(userId: env.userId).retainOriginalImages == false)
 
-        let result = try await env.screenshot.recognize(imageData: sampleImage, userId: env.userId)
+        let result = try await acceptScreenshot(env.screenshot, imageData: sampleImage, userId: env.userId)
         guard let imageId = result.sourceImageId else { return }
         #expect(try await env.binaries?.load(imageId: imageId, userId: env.userId) == nil)
     }

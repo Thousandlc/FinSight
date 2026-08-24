@@ -87,10 +87,7 @@ public enum FinancialAnswerFactBuilder {
                 facts: [
                     "description": "未结清债务余额合计",
                 ],
-                amounts: [
-                    "totalDebt": context.totalDebt,
-                    "estimatedMonthlyRepayment": context.estimatedMonthlyRepayment,
-                ],
+                amounts: debtDerivedAmounts(context, unknowns: &unknowns),
                 sourceLabels: ["Debt"],
                 unknowns: unknowns
             )
@@ -133,10 +130,7 @@ public enum FinancialAnswerFactBuilder {
             return AnswerFactPack(
                 intent: intent,
                 facts: facts,
-                amounts: [
-                    "totalDebt": context.totalDebt,
-                    "estimatedMonthlyRepayment": context.estimatedMonthlyRepayment,
-                ],
+                amounts: debtDerivedAmounts(context, unknowns: &unknowns),
                 sourceLabels: ["Debt"],
                 unknowns: unknowns,
                 requiresDisclaimer: true
@@ -232,5 +226,51 @@ public enum FinancialAnswerFactBuilder {
             method: "按本月收入减支出减还款后结余的约 20% 估算",
             unknowns: context.goals.isEmpty ? ["未设置储蓄目标"] : []
         )
+    }
+
+    private static func debtDerivedAmounts(
+        _ context: FinancialContext,
+        unknowns: inout [String]
+    ) -> [String: Money] {
+        var amounts: [String: Money] = [:]
+        putDerivedMoney(
+            DebtMoneyPresentation(
+                amount: context.totalDebt,
+                availability: context.totalDebtAvailability
+            ),
+            completeKey: "totalDebt",
+            unknownLabel: "部分余额未知",
+            into: &amounts,
+            unknowns: &unknowns
+        )
+        putDerivedMoney(
+            DebtMoneyPresentation(
+                amount: context.estimatedMonthlyRepayment,
+                availability: context.estimatedMonthlyRepaymentAvailability
+            ),
+            completeKey: "estimatedMonthlyRepayment",
+            unknownLabel: "预计每月还款信息不完整",
+            into: &amounts,
+            unknowns: &unknowns
+        )
+        return amounts
+    }
+
+    private static func putDerivedMoney(
+        _ presentation: DebtMoneyPresentation,
+        completeKey: String,
+        unknownLabel: String,
+        into amounts: inout [String: Money],
+        unknowns: inout [String]
+    ) {
+        switch presentation {
+        case .unknown:
+            unknowns.append(unknownLabel)
+        case .known(let money):
+            amounts[completeKey] = money
+        case .knownIncomplete(let money):
+            amounts[completeKey] = money
+            unknowns.append(unknownLabel)
+        }
     }
 }

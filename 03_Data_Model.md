@@ -805,6 +805,47 @@ DirectoryMediaBinaryStore retained binary（app-private filesystem）
 
 Retained originals **不是** financial facts。Backup v1 仍排除 `MediaArtifact` / original images（ADR-033）。JSON Store 保持 schema v4；ADR-034 不要求 schema migration。
 
+**Distinct from confirmed-import provenance:**
+
+```text
+MediaArtifact != ConfirmedImportProvenance
+AIRecognitionRecord != ConfirmedImportProvenance
+```
+
+`sourceImageId` / `MediaArtifact.id` 来自 `MediaLifecyclePolicy` 的非加密生命周期标识，**不是** ADR-036 接受的 exact-input 加密指纹。
+
+---
+
+## 22.2 ConfirmedImportProvenance（TARGET PERSISTED LIFECYCLE MODEL — NOT YET IMPLEMENTED）
+
+> **Implementation status:** ADR-036 **Accepted — NOT YET IMPLEMENTED**. No Swift entity, JSON Store collection, repository, or UI exists as of 2026-08-22.
+
+**Classification:** local import / provenance lifecycle metadata — **not** a financial fact, **not** AI transport, **not** observability.
+
+**Semantic role:** record that a **user-confirmed import operation** created one or more authoritative `Transaction` / `Debt` entities from an exact local input set.
+
+**Conceptual fields (not frozen as Swift properties):**
+
+| Field | Purpose |
+|-------|---------|
+| user scope | owner isolation |
+| import capability | e.g. screenshot transaction / debt scan batch |
+| source fingerprint(s) | per-input **full-file SHA-256** (local-only) |
+| operation fingerprint | canonical batch identity: order-insensitive, multiplicity-sensitive, versioned encoding |
+| confirmed entity refs | typed references to persisted Transaction / Debt ids (may grow on partial-batch retry) |
+| confirmedAt | when relation recorded |
+
+**Lifecycle:**
+
+- Created **only after** successful authoritative fact persist + user confirmation
+- **Not** created on recognition success, draft display, or stale/cancelled operations
+- **Transaction / Debt delete:** remove entity relation; delete provenance row when no refs remain
+- **Full local wipe (ADR-034):** removed with user cascade — no permanent import-blocking tombstone
+
+**Backup:** intentionally **excluded from BackupPayloadV1** (ADR-036; ADR-033 unchanged). Restore → provenance absent → duplicate/prior-scan memory resets on device.
+
+**Future persistence note (audit only — not implemented):** live store today uses `YoushuSnapshot` schema v4 with `decodeIfPresent` + empty defaults for new collections; prior additions (v3 consent/recognition/media, v4 debt inventory) bumped `schemaVersion`. Implementing this model will most naturally require a **schema version bump (likely v5)** + `reloadFromDisk` migration comment — not an silent optional field without version bump.
+
 ---
 
 ## 23. FinancialRiskAssessment（已实现）
@@ -915,6 +956,7 @@ AIRecognitionRecord
 MediaArtifact
 PendingDebtLink
 SuspectedDebt
+ConfirmedImportProvenance（ADR-036 target — excluded even when implemented locally）
 ```
 
 Restore candidate 语义：

@@ -74,3 +74,25 @@ public protocol FinancialInsightRepository: Sendable {
     func fetchAll(userId: UUID) async throws -> [FinancialInsight]
     func delete(id: UUID) async throws
 }
+
+public protocol ConfirmedImportProvenanceRepository: Sendable {
+    func find(
+        userId: UUID,
+        capability: ConfirmedImportCapability,
+        operationFingerprint: ImportOperationFingerprint
+    ) async throws -> ConfirmedImportProvenance?
+
+    func fetch(id: UUID) async throws -> ConfirmedImportProvenance?
+
+    func fetchAll(userId: UUID) async throws -> [ConfirmedImportProvenance]
+
+    /// Creates or merges entity references for the logical provenance key.
+    func upsert(_ provenance: ConfirmedImportProvenance) async throws -> ConfirmedImportProvenance
+
+    func removeConfirmedEntity(
+        userId: UUID,
+        reference: ConfirmedImportEntityReference
+    ) async throws
+
+    func deleteAll(userId: UUID) async throws
+}

@@ -467,25 +467,43 @@ public struct MockAIProvider: TransactionExtracting, DebtScanning, InsightExplai
                 references: [AssistantReference(key: "availableCash")]
             )
         case .totalDebt:
-            let debt = facts.amounts["totalDebt"] ?? moneyFromDTO(context.debt.totalOutstanding)
-            let monthly = facts.amounts["estimatedMonthlyRepayment"] ?? moneyFromDTO(context.debt.estimatedMonthlyRepayment)
-            let body = "根据已登记债务，未结清总额约为 \(money(debt))，预计月供约 \(money(monthly))。来源：Debt。"
+            let debt = facts.amounts["totalDebt"] ?? Self.moneyFromDTO(context.debt.totalOutstanding)
+            let monthly = facts.amounts["estimatedMonthlyRepayment"]
+                ?? Self.moneyFromDTO(context.debt.estimatedMonthlyRepayment)
+            var cited: [String] = []
+            var keyFacts: [AssistantKeyFact] = []
+            var references: [AssistantReference] = []
+            var parts: [String] = []
+            if let debt {
+                parts.append("未结清已知余额约为 \(money(debt))")
+                cited.append("totalDebt")
+                keyFacts.append(Self.moneyKeyFact(label: "总债务", source: "totalDebt", kind: .debt, amount: debt))
+                references.append(AssistantReference(key: "totalDebt"))
+            }
+            if let monthly {
+                parts.append("预计月供约 \(money(monthly))")
+                cited.append("estimatedMonthlyRepayment")
+                keyFacts.append(
+                    Self.moneyKeyFact(label: "预计月供", source: "estimatedMonthlyRepayment", kind: .debt, amount: monthly)
+                )
+                references.append(AssistantReference(key: "estimatedMonthlyRepayment"))
+            }
+            let body: String
+            if parts.isEmpty {
+                body = "已登记债务金额尚不完整，无法给出确定总额。来源：Debt。"
+            } else {
+                body = "根据已登记债务，\(parts.joined(separator: "，"))。来源：Debt。"
+            }
             return AssistantAnswerDraft(
                 title: "总债务",
                 body: body,
                 answer: body,
-                citedFactKeys: ["totalDebt", "estimatedMonthlyRepayment"],
+                citedFactKeys: cited,
                 disclaimer: disclaimer,
                 unknowns: facts.unknowns,
-                keyFacts: [
-                    Self.moneyKeyFact(label: "总债务", source: "totalDebt", kind: .debt, amount: debt),
-                    Self.moneyKeyFact(label: "预计月供", source: "estimatedMonthlyRepayment", kind: .debt, amount: monthly),
-                ],
+                keyFacts: keyFacts,
                 actions: [AssistantAction(title: "查看债务", destination: .debt)],
-                references: [
-                    AssistantReference(key: "totalDebt"),
-                    AssistantReference(key: "estimatedMonthlyRepayment"),
-                ]
+                references: references
             )
         case .spendingBreakdown:
             var body = "本月生活支出合计 \(money(facts.amounts["monthlyExpense"] ?? moneyFromDTO(context.monthly.expense)))。"
@@ -518,15 +536,20 @@ public struct MockAIProvider: TransactionExtracting, DebtScanning, InsightExplai
             )
         case .debtFreeDate:
             let dateText = facts.facts["estimatedDebtFreeDate"] ?? "尚不确定"
-            let body = "在维持当前月供假设下，预计约在 \(dateText) 前后还清已登记债务。总债务 \(money(facts.amounts["totalDebt"] ?? moneyFromDTO(context.debt.totalOutstanding)))。来源：Debt。"
-            var keyFacts: [AssistantKeyFact] = [
-                Self.moneyKeyFact(
-                    label: "总债务",
-                    source: "totalDebt",
-                    kind: .debt,
-                    amount: facts.amounts["totalDebt"] ?? moneyFromDTO(context.debt.totalOutstanding)
-                ),
-            ]
+            let totalDebt = facts.amounts["totalDebt"] ?? Self.moneyFromDTO(context.debt.totalOutstanding)
+            let debtClause = totalDebt.map { "总债务 \(money($0))。" } ?? "总债务尚不完整。"
+            let body = "在维持当前月供假设下，预计约在 \(dateText) 前后还清已登记债务。\(debtClause)来源：Debt。"
+            var keyFacts: [AssistantKeyFact] = []
+            if let totalDebt {
+                keyFacts.append(
+                    Self.moneyKeyFact(
+                        label: "总债务",
+                        source: "totalDebt",
+                        kind: .debt,
+                        amount: totalDebt
+                    )
+                )
+            }
             if let dateFact = facts.facts["estimatedDebtFreeDate"] {
                 keyFacts.append(
                     AssistantKeyFact(
@@ -548,15 +571,21 @@ public struct MockAIProvider: TransactionExtracting, DebtScanning, InsightExplai
                     )
                 )
             }
-            var references: [AssistantReference] = [AssistantReference(key: "totalDebt")]
+            var references: [AssistantReference] = []
+            if totalDebt != nil {
+                references.append(AssistantReference(key: "totalDebt"))
+            }
             if facts.facts["estimatedDebtFreeDate"] != nil {
                 references.append(AssistantReference(key: "estimatedDebtFreeDate"))
             }
+            var cited: [String] = []
+            if totalDebt != nil { cited.append("totalDebt") }
+            if facts.facts["estimatedDebtFreeDate"] != nil { cited.append("estimatedDebtFreeDate") }
             return AssistantAnswerDraft(
                 title: "预计清偿时间",
                 body: body,
                 answer: body,
-                citedFactKeys: ["estimatedDebtFreeDate", "totalDebt"],
+                citedFactKeys: cited,
                 disclaimer: disclaimer,
                 unknowns: facts.unknowns,
                 keyFacts: keyFacts,
@@ -636,6 +665,10 @@ public struct MockAIProvider: TransactionExtracting, DebtScanning, InsightExplai
 
     private static func moneyFromDTO(_ dto: MoneyDTO) -> Money {
         Money(amount: dto.amount, currencyCode: dto.currencyCode)
+    }
+
+    private static func moneyFromDTO(_ dto: MoneyDTO?) -> Money? {
+        dto.map { Money(amount: $0.amount, currencyCode: $0.currencyCode) }
     }
 
     public static func sampleSuccessDraft() -> TransactionDraft {

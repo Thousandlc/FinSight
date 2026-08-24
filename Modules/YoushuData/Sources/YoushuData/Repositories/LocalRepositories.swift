@@ -368,3 +368,46 @@ public struct LocalMediaArtifactRepository: MediaArtifactRepository {
         try await store.deleteMediaArtifacts(userId: userId)
     }
 }
+
+public struct LocalConfirmedImportProvenanceRepository: ConfirmedImportProvenanceRepository {
+    private let store: YoushuStore
+
+    public init(store: YoushuStore) {
+        self.store = store
+    }
+
+    public func find(
+        userId: UUID,
+        capability: ConfirmedImportCapability,
+        operationFingerprint: ImportOperationFingerprint
+    ) async throws -> ConfirmedImportProvenance? {
+        await store.fetchConfirmedImportProvenance(
+            userId: userId,
+            capability: capability,
+            operationFingerprint: operationFingerprint
+        )
+    }
+
+    public func fetch(id: UUID) async throws -> ConfirmedImportProvenance? {
+        await store.fetchConfirmedImportProvenance(id: id)
+    }
+
+    public func fetchAll(userId: UUID) async throws -> [ConfirmedImportProvenance] {
+        await store.fetchConfirmedImportProvenances(userId: userId)
+    }
+
+    public func upsert(_ provenance: ConfirmedImportProvenance) async throws -> ConfirmedImportProvenance {
+        try await store.upsertConfirmedImportProvenance(provenance)
+    }
+
+    public func removeConfirmedEntity(
+        userId: UUID,
+        reference: ConfirmedImportEntityReference
+    ) async throws {
+        try await store.removeConfirmedImportEntityReference(userId: userId, reference: reference)
+    }
+
+    public func deleteAll(userId: UUID) async throws {
+        try await store.deleteConfirmedImportProvenances(userId: userId)
+    }
+}

@@ -95,7 +95,7 @@ struct DebtCenterCalculatorTests {
         ]
         let next = DebtCenterCalculator.nextPayment(debts: debts, asOf: Date(timeIntervalSince1970: 1_700_000_000))
         #expect(next?.debt.lender == "A")
-        #expect(next?.amount.amount == 100)
+        #expect(next?.amount?.amount == 100)
     }
 
     @Test("pressure rises with overdue and high-cost debts")
@@ -124,6 +124,45 @@ struct DebtCenterCalculatorTests {
         #expect(highScore > lowScore)
         #expect(DebtCenterCalculator.debtPressureLevel(score: highScore) == .high
             || DebtCenterCalculator.debtPressureLevel(score: highScore) == .critical)
+    }
+
+    @Test("known due date with unknown payment amounts keeps amount unknown")
+    func nextPaymentUnknownAmount() {
+        let due = Date(timeIntervalSince1970: 1_700_100_000)
+        let debt = Debt(
+            userId: UUID(),
+            lender: "招行",
+            outstandingBalance: Money(amount: 8_000, currencyCode: "CNY"),
+            dueDate: due,
+            status: .active
+        )
+        let next = DebtCenterCalculator.nextPayment(
+            debts: [debt],
+            asOf: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        #expect(next?.date == due)
+        #expect(next?.debt.lender == "招行")
+        #expect(next?.amount == nil)
+        #expect(next?.amount != Money(amount: 0, currencyCode: "CNY"))
+    }
+
+    @Test("next payment preserves known currentDue")
+    func nextPaymentKnownCurrentDue() {
+        let due = Date(timeIntervalSince1970: 1_700_100_000)
+        let currentDue = Money(amount: 350, currencyCode: "CNY")
+        let debt = Debt(
+            userId: UUID(),
+            currentDue: currentDue,
+            minimumDue: Money(amount: 100, currencyCode: "CNY"),
+            installmentAmount: Money(amount: 999, currencyCode: "CNY"),
+            dueDate: due,
+            status: .active
+        )
+        let next = DebtCenterCalculator.nextPayment(
+            debts: [debt],
+            asOf: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        #expect(next?.amount == currentDue)
     }
 }
 
@@ -309,7 +348,9 @@ struct DebtServiceTests {
         let listService = DebtListService(debts: env.container.debts, events: env.container.debtEvents)
         let snapshot = try await listService.loadSnapshot(userId: env.userId)
         #expect(snapshot.totalOutstanding.amount == 4000)
+        #expect(snapshot.outstandingAvailability == .known)
         #expect(snapshot.estimatedMonthlyRepayment.amount == 1000)
+        #expect(snapshot.estimatedMonthlyRepaymentAvailability == .known)
         #expect(snapshot.lastRepaymentAmount?.amount == 1000)
         #expect(snapshot.debtFreeEstimate != nil)
         #expect(!snapshot.highCostDebts.isEmpty)

@@ -36,7 +36,7 @@ struct MVPFinancialConsistencyTests {
                 formType: .expense
             ),
             userId: userId
-        )
+        ).transaction
 
         let debtService = DebtService(
             debts: container.debts,

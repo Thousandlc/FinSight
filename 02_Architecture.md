@@ -2,7 +2,7 @@
 
 > 文档角色：系统架构长期真相源  
 > 版本：v1.0  
-> 更新日期：2026-08-21  
+> 更新日期：2026-08-22  
 > 状态：Active  
 > 原则：本文记录“当前确认架构 + 已确定的演进方向”，不把聊天中的临时建议视作实现事实。
 
@@ -691,6 +691,59 @@ Provider
 
 撤销授权后，新请求必须遵守最新状态。
 
+### Target Import Provenance Architecture（ADR-036 — ACCEPTED / NOT YET IMPLEMENTED）
+
+> **Status:** Accepted architecture target only. **Not implemented** in production code, JSON Store, Backup v1, or UI as of 2026-08-22. Current image recognition path still uses **`MockAIProvider`**.
+
+**Target flow:**
+
+```text
+Input bytes
+        ↓
+Local full-file SHA-256 fingerprint(s)
+        ↓
+Recognition (current port: TransactionExtracting / DebtScanning batch)
+        ↓
+Unpersisted recognition result
+        ↓
+Application operation-currentness gate (generation / cancel-and-replace)
+        ├─ stale / cancelled → discard in memory; no durable recognition metadata
+        └─ current → active review lifecycle
+        ↓
+User review / edit
+        ↓
+User confirmation
+        ↓
+Authoritative financial fact persist (Transaction / Debt)
+        ↓
+ConfirmedImportProvenance (local durable; excluded from Backup v1)
+```
+
+**Key boundaries (target — not current runtime):**
+
+| Concept | Role |
+|---------|------|
+| `ConfirmedImportProvenance` | Local durable **confirmed-import** memory; not a financial fact |
+| `AIRecognitionRecord` | Optional workflow/audit metadata **after** Application acceptance |
+| `MediaArtifact` | Media lifecycle / retention; **not** provenance authority |
+| `sourceImageId` | Media lifecycle id; **not** cryptographic exact-input fingerprint |
+
+**Explicitly deferred (ADR-036):**
+
+- Per-image Provider outcome taxonomy until a **real pixel-reading recognizer** exists
+- Debt field-level reconciliation/merge rules
+- Portable provenance across Backup v1 restore (requires future Backup v2 / ADR)
+- One-call-per-document Debt scanning as default architecture
+
+**Current implemented contract (unchanged until later implementation steps):**
+
+```text
+DebtScanning.scanDebts(from: [BillDocument]) → [DebtCandidate]
+ScreenshotBookkeeping: recognize → confirm → Transaction
+```
+
+Same-flow reliability (Steps 3–4A) is closed; cross-session exact-source provenance and stale metadata write-after-acceptance are **implementation pending**.
+
 ### Production Consent Wiring（Step 5A — 2026-08-20）
 
 Production Home 始终通过：
@@ -887,6 +940,7 @@ ApplicationRestoreRefresh（session + ViewModels + presentation subtree）
 - External file remains untrusted until full validation + transactional commit
 - Same encrypted bytes preflight → commit；URL 不在 preview 后重读
 - Excluded from backup/restore carry-forward：`FinancialInsight`, `AIDataConsent`, `AIRecognitionRecord`, `MediaArtifact`, `PendingDebtLink`, `SuspectedDebt`；restore 后 `debtImportInProgress = false`；AI consent → deniedDefault
+- **`ConfirmedImportProvenance`（ADR-036 target）亦排除于 Backup v1** — 即使未来在 live JSON Store 落地，Backup v1 payload **不变**
 - Derived read models（Summary / CashFlow / Risk / HomeOverview 等）restore 后重算，不是 backup facts
 
 ### 15.4 Remaining persistence gaps
@@ -954,7 +1008,7 @@ AI 不应该决定：资金缺口是否真实、债务是否逾期、金额是�
 ### 仍未完成 / 未来演进
 
 - 非 monthly-summary AI 路径（ask / insight / purchase）的 policy ownership 仍主要 mock / 局部
-- Production observability / live policy tuning 未验证
+- FinancialRiskPolicy live policy tuning 未验证（ADR-035 已关闭 AI error taxonomy / observability；不含 risk-policy live tuning）
 - 不要写 production-ready / production-grade（本轮无额外证据）
 
 ---
@@ -1015,7 +1069,9 @@ Regression：`HomeOverviewAIFailureIsolationTests`、`HomeOverviewCachePersisten
 
 ## 18. Observability
 
-> **Implementation status（2026-08-22）：Error taxonomy / privacy-safe event contract drafted; Gateway instrumentation implemented; iOS instrumentation implemented; cross-platform privacy/integration regression in progress — Production Observability closure 仍进行中。**
+> **Production Observability & Error Taxonomy → IMPLEMENTED / VERIFIED — 2026-08-22（ADR-035）**
+
+Swift + Go 共享 taxonomy parity fixture：`contracts/observability_taxonomy_defaults.json`（无 codegen）。
 
 Canonical production contract（Swift `YoushuFoundation` + Gateway `observability` package）：
 
@@ -1027,6 +1083,8 @@ retryability
 outcome
 ```
 
+Outcomes：`success` / `degraded` / `failed` / `cancelled`。
+
 Trust-boundary stages remain distinct:
 
 ```text
@@ -1035,42 +1093,21 @@ providerStructuredOutput
 ≠ assistantValidation
 ```
 
-Production event fields are allowlisted（requestId / operation / outcome / duration / retryCount / provider / model / token usage / optional cost provenance）。
+Correlation：one logical iOS AI operation → one opaque `requestId` → iOS observability event + `X-Youshu-Request-Id` → Gateway `event=ai_request`（one terminal event per HTTP attempt）。iOS retry 保持同一 logical `requestId`。Header 名不变，不是品牌迁移。
 
-Gateway / App 后续至少需要非敏感生产可观测性：
+Gateway 记录 allowlisted metadata（requestId / operation / outcome / durationMs / retryCount / provider·model·status / failureStage / errorCode / failureClass / retryability / schemaStage / token usage when returned / gatewayVersion）。
 
-- requestId
-- duration
-- provider status
-- failure stage
-- schema decode stage
-- validator failure type
-- token usage / cost metadata
-- retry count
+iOS 观察 consent / requestSerialization / clientTransport / clientResponseDecode / assistantValidation / insightPersistence，以及 Gateway envelope 的 stable `errorCode`。iOS **不**从 public envelope 伪造 Gateway-internal `failureStage`；跨系统 join 用 `requestId`。
 
-禁止记录：
+Token usage：Gateway 在 Bailian 实际返回时记录；iOS 不重复（public success envelope 不暴露 usage）。**cost 缺席**（无价格表 / 估算成本）。
 
-- 原始财务 payload
-- API Key
-- Token
-- 原始截图
-- 可直接还原用户隐私的 prompt dump
-- 任意 `localizedDescription` / raw Provider body 作为 production error identifier
+Production sinks：iOS `ObservabilityLogSink` 与 Gateway `SafeLog` 均为 **local structured production-safe logs**。Observability/logging 失败不得拖垮 AI/业务操作。ADR-035 **不包含** remote aggregation / dashboard。
 
-Debug-only raw dump 必须显式开关，且不可进入 production default。
+禁止记录：原始财务 payload、prompt、question/body、merchant、note、financial UUID/sourceIds、原始截图、Provider raw response、API Key、Authorization / client token、任意 localized error string。Debug-only raw dump 必须显式开关，且不可进入 production default。Observability **不是**新的 Consent 或 AI 数据传输通道。
 
-Production Observability **尚未关闭**：
+Home degraded（澄清 ADR-020 / ADR-032，不取代）：Provider / Validator 失败 → deterministic fallback → Home available → `degraded`；optional monthly-summary cache persist 失败 → 已校验 ephemeral AI 摘要 → Home available → `insightPersistence` / `persistenceFailure` / `degraded`（不伪造 freshness，不把 stale cache 写成 fresh）；core repository / deterministic 失败 → Home failure。
 
-```text
-contract established
-Gateway instrumentation implemented
-iOS instrumentation implemented
-cross-platform privacy/integration regression in progress
-```
-
-Verified: Swift/Go taxonomy fixture parity; iOS does not invent Gateway-internal `failureStage` from public error envelopes; local Gateway httptest + iOS client component `requestId` correlation; production sinks are **local structured logs only** (not remote aggregation). Token usage remains Gateway-owned; cost remains absent. Home optional monthly-summary **cache persist failure** is isolated: `insightPersistence` / `persistenceFailure` / `outcome=degraded`, Home remains available with the already-validated AI summary shown ephemerally; durable cache is unchanged.
-
-ADR-035 / Context Sync / Apple-gate closure 仍待下一步。
+ADR-035 **不表示**：public Gateway production-ready、真实 Bailian production smoke 已完成、remote aggregation 已部署、iOS 公网 production AI wiring 已完成、ICP 约束解除。
 
 ---
 

@@ -1,5 +1,19 @@
 import Foundation
 
+/// Primary Transaction persist outcome. Debt linking is secondary and may fail independently.
+public struct RecordTransactionOutcome: Sendable, Equatable {
+    public var transaction: Transaction
+    /// User-safe message when debt linking failed after the Transaction was persisted.
+    public var debtLinkingIssue: String?
+
+    public init(transaction: Transaction, debtLinkingIssue: String? = nil) {
+        self.transaction = transaction
+        self.debtLinkingIssue = debtLinkingIssue
+    }
+
+    public var isFullySuccessful: Bool { debtLinkingIssue == nil }
+}
+
 public struct RecordTransactionInput: Sendable, Equatable {
     public var amount: Decimal
     public var currencyCode: String
@@ -12,6 +26,8 @@ public struct RecordTransactionInput: Sendable, Equatable {
     public var source: TransactionSource
     public var recognitionConfidence: Double?
     public var sourceImageId: String?
+    /// Import-local idempotency key. When set, reused to upsert the same Transaction id.
+    public var idempotencyKey: UUID?
 
     public init(
         amount: Decimal,
@@ -24,7 +40,8 @@ public struct RecordTransactionInput: Sendable, Equatable {
         formType: TransactionFormType,
         source: TransactionSource = .manual,
         recognitionConfidence: Double? = nil,
-        sourceImageId: String? = nil
+        sourceImageId: String? = nil,
+        idempotencyKey: UUID? = nil
     ) {
         self.amount = amount
         self.currencyCode = currencyCode.uppercased()
@@ -37,6 +54,7 @@ public struct RecordTransactionInput: Sendable, Equatable {
         self.source = source
         self.recognitionConfidence = recognitionConfidence
         self.sourceImageId = sourceImageId
+        self.idempotencyKey = idempotencyKey
     }
 }
 

@@ -41,6 +41,7 @@ public struct DebtView: View {
                 .sheet(isPresented: $viewModel.isPresentingScanner) {
                     DebtScannerSheet(viewModel: scannerViewModel)
                         .onAppear { scannerViewModel.prepareForPresentation() }
+                        .onDisappear { scannerViewModel.handleDismiss() }
                 }
                 .navigationDestination(item: $viewModel.selectedDebtId) { debtId in
                     DebtDetailView(viewModel: viewModel, debtId: debtId)
@@ -109,12 +110,12 @@ public struct DebtView: View {
                     Text("总剩余债务")
                         .font(YSTypography.caption)
                         .foregroundStyle(YSColor.Fallback.textSecondary)
-                    YSMoneyText(snapshot.totalOutstanding, style: YSTypography.amountLarge, color: YSColor.Fallback.debt)
+                    outstandingTotalHero(snapshot)
                 }
             }
 
             HStack(spacing: YSSpacing.sm) {
-                metricCard(title: "预计每月还款", money: snapshot.estimatedMonthlyRepayment)
+                metricCard(title: "预计每月还款", presentation: snapshot.estimatedMonthlyPresentation)
                 metricCard(
                     title: "债务压力",
                     text: "\(snapshot.debtPressureLevel.displayName) · \(snapshot.debtPressureScore)"
@@ -148,7 +149,8 @@ public struct DebtView: View {
                             value: [
                                 snapshot.nextPaymentLabel,
                                 nextDate.formatted(date: .abbreviated, time: .omitted),
-                                snapshot.nextPaymentAmount.map { YSMoneyFormatter.string(for: $0) },
+                                snapshot.nextPaymentAmount.map { YSMoneyFormatter.string(for: $0) }
+                                    ?? DebtMoneyPresentation.unknownPlaceholder,
                             ]
                             .compactMap { $0 }
                             .joined(separator: " · ")
@@ -159,13 +161,41 @@ public struct DebtView: View {
         }
     }
 
-    private func metricCard(title: String, money: Money) -> some View {
+    @ViewBuilder
+    private func outstandingTotalHero(_ snapshot: DebtListSnapshot) -> some View {
+        derivedMoneyStack(snapshot.outstandingPresentation, style: YSTypography.amountLarge, color: YSColor.Fallback.debt)
+    }
+
+    @ViewBuilder
+    private func derivedMoneyStack(
+        _ presentation: DebtMoneyPresentation,
+        style: Font,
+        color: Color = YSColor.Fallback.textPrimary
+    ) -> some View {
+        VStack(alignment: .leading, spacing: YSSpacing.xxs) {
+            switch presentation {
+            case .unknown:
+                Text(DebtMoneyPresentation.unknownPlaceholder)
+                    .font(style)
+                    .foregroundStyle(color)
+            case .known(let money), .knownIncomplete(let money):
+                YSMoneyText(money, style: style, color: color)
+            }
+            if let caption = presentation.caption {
+                Text(caption)
+                    .font(YSTypography.caption2)
+                    .foregroundStyle(YSColor.Fallback.textSecondary)
+            }
+        }
+    }
+
+    private func metricCard(title: String, presentation: DebtMoneyPresentation) -> some View {
         YSCard {
             VStack(alignment: .leading, spacing: YSSpacing.xxs) {
                 Text(title)
                     .font(YSTypography.caption2)
                     .foregroundStyle(YSColor.Fallback.textSecondary)
-                YSMoneyText(money, style: YSTypography.amountSmall)
+                derivedMoneyStack(presentation, style: YSTypography.amountSmall)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

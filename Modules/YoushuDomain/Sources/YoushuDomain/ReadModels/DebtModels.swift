@@ -5,7 +5,9 @@ import YoushuFoundation
 public struct DebtListSnapshot: Equatable, Sendable {
     public var debts: [Debt]
     public var totalOutstanding: Money
+    public var outstandingAvailability: FieldAvailability
     public var estimatedMonthlyRepayment: Money
+    public var estimatedMonthlyRepaymentAvailability: FieldAvailability
     public var lastRepaymentDate: Date?
     public var lastRepaymentAmount: Money?
     public var nextPaymentDate: Date?
@@ -18,10 +20,23 @@ public struct DebtListSnapshot: Equatable, Sendable {
 
     public var isEmpty: Bool { debts.isEmpty }
 
+    public var outstandingPresentation: DebtMoneyPresentation {
+        DebtMoneyPresentation(amount: totalOutstanding, availability: outstandingAvailability)
+    }
+
+    public var estimatedMonthlyPresentation: DebtMoneyPresentation {
+        DebtMoneyPresentation(
+            amount: estimatedMonthlyRepayment,
+            availability: estimatedMonthlyRepaymentAvailability
+        )
+    }
+
     public init(
         debts: [Debt] = [],
         totalOutstanding: Money = .zeroCNY,
+        outstandingAvailability: FieldAvailability = .known,
         estimatedMonthlyRepayment: Money = .zeroCNY,
+        estimatedMonthlyRepaymentAvailability: FieldAvailability = .known,
         lastRepaymentDate: Date? = nil,
         lastRepaymentAmount: Money? = nil,
         nextPaymentDate: Date? = nil,
@@ -34,7 +49,9 @@ public struct DebtListSnapshot: Equatable, Sendable {
     ) {
         self.debts = debts
         self.totalOutstanding = totalOutstanding
+        self.outstandingAvailability = outstandingAvailability
         self.estimatedMonthlyRepayment = estimatedMonthlyRepayment
+        self.estimatedMonthlyRepaymentAvailability = estimatedMonthlyRepaymentAvailability
         self.lastRepaymentDate = lastRepaymentDate
         self.lastRepaymentAmount = lastRepaymentAmount
         self.nextPaymentDate = nextPaymentDate
@@ -78,10 +95,12 @@ public enum DebtListSort: String, CaseIterable, Sendable {
     }
 }
 
-/// 渐进式建档：仅债权方 + 大致欠款即可创建。
+/// 渐进式建档：债权方必填。
+/// `approximateBalance` 是已知的剩余总欠款；`nil` 表示总欠款未知（不得用本期应还顶替）。
+/// 手动建档 UI 仍要求用户明确填写大致欠款。
 public struct CreateDebtInput: Sendable, Equatable {
     public var lender: String
-    public var approximateBalance: Decimal
+    public var approximateBalance: Decimal?
     public var currencyCode: String
     public var productName: String?
     public var debtType: DebtType
@@ -98,10 +117,12 @@ public struct CreateDebtInput: Sendable, Equatable {
     public var note: String?
     public var status: DebtStatus
     public var source: DebtSource
+    /// Import-local idempotency key. When set, reused to upsert the same Debt id.
+    public var idempotencyKey: UUID?
 
     public init(
         lender: String,
-        approximateBalance: Decimal,
+        approximateBalance: Decimal?,
         currencyCode: String = "CNY",
         productName: String? = nil,
         debtType: DebtType = .other,
@@ -117,7 +138,8 @@ public struct CreateDebtInput: Sendable, Equatable {
         fee: Decimal? = nil,
         note: String? = nil,
         status: DebtStatus = .active,
-        source: DebtSource = .userInput
+        source: DebtSource = .userInput,
+        idempotencyKey: UUID? = nil
     ) {
         self.lender = lender
         self.approximateBalance = approximateBalance
@@ -137,6 +159,7 @@ public struct CreateDebtInput: Sendable, Equatable {
         self.note = note
         self.status = status
         self.source = source
+        self.idempotencyKey = idempotencyKey
     }
 }
 

@@ -99,6 +99,34 @@ struct BackupPayloadV1Tests {
         #expect(!serialized.contains("workflow state"))
         #expect(!serialized.contains("detector candidate"))
         #expect(!serialized.contains("debtImportInProgress"))
+        #expect(!serialized.contains("canonical-v1-sha256"))
+        #expect(!serialized.contains("confirmedImportProvenances"))
+    }
+
+    @Test("backup export excludes confirmed import provenance")
+    func backupExcludesProvenance() async throws {
+        let store = YoushuStore()
+        let container = RepositoryContainer(store: store)
+        let user = User(displayName: "Provenance User")
+        try await container.users.upsert(user)
+        _ = try await container.confirmedImportProvenances.upsert(
+            try ConfirmedImportProvenance(
+                userId: user.id,
+                capability: .debtScan,
+                sourceFingerprints: [ImportSourceFingerprint.sha256(of: Data("scan".utf8))],
+                confirmedEntityReferences: [.debt(UUID())]
+            )
+        )
+        #expect(await store.currentSnapshot().confirmedImportProvenances.count == 1)
+
+        let payload = BackupSnapshotMapper.makePayload(from: await store.currentSnapshot(), sourceAppVersion: "test")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        let serialized = try String(decoding: encoder.encode(payload), as: UTF8.self)
+        #expect(!serialized.contains("canonical-v1-sha256"))
+        #expect(!serialized.contains("confirmedImportProvenances"))
+        #expect(!serialized.contains("debtScan"))
     }
 
     @Test("backup user representation carries no consent, secret or transient state")

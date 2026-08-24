@@ -28,6 +28,7 @@ public struct TransactionView: View {
                 .sheet(isPresented: $viewModel.isPresentingScreenshotBookkeeping) {
                     ScreenshotBookkeepingSheet(viewModel: screenshotViewModel)
                         .onAppear { screenshotViewModel.prepareForPresentation() }
+                        .onDisappear { screenshotViewModel.handleDismiss() }
                 }
                 .confirmationDialog(
                     "确认删除这笔交易？",

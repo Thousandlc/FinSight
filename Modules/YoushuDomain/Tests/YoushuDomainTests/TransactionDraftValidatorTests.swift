@@ -46,7 +46,8 @@ struct TransactionDraftValidatorTests {
                     date: Date(),
                     category: "餐饮",
                     accountId: UUID(),
-                    formType: .expense
+                    formType: .expense,
+                    confirmationToken: UUID()
                 )
             )
         }

@@ -18,6 +18,7 @@ public struct RepositoryContainer: Sendable {
     public let aiDataConsents: any AIDataConsentRepository
     public let aiRecognitionRecords: any AIRecognitionRecordRepository
     public let mediaArtifacts: any MediaArtifactRepository
+    public let confirmedImportProvenances: any ConfirmedImportProvenanceRepository
     public let store: YoushuStore
 
     public init(store: YoushuStore) {
@@ -37,6 +38,7 @@ public struct RepositoryContainer: Sendable {
         self.aiDataConsents = LocalAIDataConsentRepository(store: store)
         self.aiRecognitionRecords = LocalAIRecognitionRecordRepository(store: store)
         self.mediaArtifacts = LocalMediaArtifactRepository(store: store)
+        self.confirmedImportProvenances = LocalConfirmedImportProvenanceRepository(store: store)
     }
 
     public static func inMemory() -> RepositoryContainer {

@@ -122,7 +122,7 @@ struct AccountBalanceEngineTests {
         let created = try await service.record(
             RecordTransactionInput(amount: 100, category: "餐饮", accountId: cash.id, formType: .expense),
             userId: userId
-        )
+        ).transaction
         var txs = try await container.transactions.fetchAll(userId: userId)
         var balance = AccountBalanceEngine.balance(account: cash, transactions: txs)
         #expect(balance.amount == 900)

@@ -193,6 +193,6 @@ struct DebtInventorySemanticTests {
         let fetched = try await RepositoryContainer(store: reloaded).users.fetch(id: userId)
         #expect(fetched?.debtInventoryEstablishment == .confirmedComplete)
         #expect(fetched?.debtInventoryEstablishmentSource == .userConfirmedNoDebt)
-        #expect(await reloaded.currentSnapshot().schemaVersion == 4)
+        #expect(await reloaded.currentSnapshot().schemaVersion == YoushuSnapshot.currentSchemaVersion)
     }
 }

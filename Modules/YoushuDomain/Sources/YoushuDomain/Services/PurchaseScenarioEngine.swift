@@ -18,9 +18,13 @@ public enum PurchaseScenarioEngine {
 
         let futureIncome = context.monthlyIncome
         let fixedExpenses = context.monthlyExpense
-        let debtPayments = context.estimatedMonthlyRepayment.amount > 0
-            ? context.estimatedMonthlyRepayment
-            : context.monthlyDebtPayment
+        let debtPayments: Money
+        if context.estimatedMonthlyRepaymentAvailability == .known,
+           context.estimatedMonthlyRepayment.amount > 0 {
+            debtPayments = context.estimatedMonthlyRepayment
+        } else {
+            debtPayments = context.monthlyDebtPayment
+        }
 
         var projectedMin = context.cashFlow30.map {
             Money(amount: $0.minimumBalance.amount - amount.amount, currencyCode: currency)

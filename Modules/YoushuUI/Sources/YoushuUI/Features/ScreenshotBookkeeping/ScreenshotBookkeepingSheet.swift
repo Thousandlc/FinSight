@@ -29,6 +29,8 @@ public struct ScreenshotBookkeepingSheet: View {
                     pickStep
                 case .preview:
                     previewStep
+                case .priorImportWarning:
+                    priorImportWarningStep
                 case .recognizing:
                     YSLoadingState(message: "正在识别交易信息…")
                 case .confirm:
@@ -47,6 +49,7 @@ public struct ScreenshotBookkeepingSheet: View {
             }
         }
         .task { await viewModel.loadAccounts() }
+        .onDisappear { viewModel.handleDismiss() }
         .onChange(of: pickerItem) { _, item in
             guard let item else { return }
             Task {
@@ -71,8 +74,8 @@ public struct ScreenshotBookkeepingSheet: View {
                 }
             }
             Spacer()
-            YSButton("我已了解，继续") {
-                viewModel.acceptPrivacy()
+            YSButton(isAcceptingPrivacy ? "保存授权中…" : "我已了解，继续", isLoading: viewModel.isAcceptingPrivacy) {
+                Task { await viewModel.acceptPrivacy() }
             }
         }
         .padding(YSSpacing.md)
@@ -121,7 +124,7 @@ public struct ScreenshotBookkeepingSheet: View {
                 .font(YSTypography.body)
                 .foregroundStyle(YSColor.Fallback.textSecondary)
             YSButton("开始识别") {
-                Task { await viewModel.startRecognition() }
+                viewModel.startRecognition()
             }
             YSButton("重新选择", kind: .secondary) {
                 pickerItem = nil
@@ -130,6 +133,89 @@ public struct ScreenshotBookkeepingSheet: View {
             Spacer()
         }
         .padding(YSSpacing.md)
+    }
+
+    private var priorImportWarningStep: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: YSSpacing.lg) {
+                YSCard {
+                    VStack(alignment: .leading, spacing: YSSpacing.sm) {
+                        Text("此截图曾导入过")
+                            .font(YSTypography.title3)
+                        Text("这张截图与之前已确认导入的来源一致，可能产生重复记录。你可以查看已有记录，或选择仍然导入。")
+                            .font(YSTypography.body)
+                            .foregroundStyle(YSColor.Fallback.textSecondary)
+                    }
+                }
+
+                if let warning = viewModel.priorImportWarning, !warning.existingTransactions.isEmpty {
+                    YSCard {
+                        VStack(alignment: .leading, spacing: YSSpacing.sm) {
+                            Text("已导入记录")
+                                .font(YSTypography.headline)
+                            ForEach(warning.existingTransactions) { item in
+                                priorImportRow(item)
+                            }
+                        }
+                    }
+                }
+
+                if let error = viewModel.formError {
+                    Text(error)
+                        .font(YSTypography.caption)
+                        .foregroundStyle(YSColor.Fallback.warning)
+                }
+
+                if let warning = viewModel.priorImportWarning {
+                    if warning.existingTransactions.count == 1,
+                       let item = warning.existingTransactions.first {
+                        YSButton("查看已导入记录", kind: .secondary) {
+                            Task {
+                                await viewModel.viewExistingTransaction(item.id)
+                                dismiss()
+                            }
+                        }
+                    } else if warning.existingTransactions.count > 1 {
+                        ForEach(warning.existingTransactions) { item in
+                            YSButton("查看：\(priorImportLabel(item))", kind: .secondary) {
+                                Task {
+                                    await viewModel.viewExistingTransaction(item.id)
+                                    dismiss()
+                                }
+                            }
+                        }
+                    }
+                }
+
+                YSButton("仍然导入") {
+                    viewModel.continueDespitePriorImport()
+                }
+                YSButton("返回", kind: .secondary) {
+                    viewModel.cancelPriorImportWarning()
+                }
+            }
+            .padding(YSSpacing.md)
+        }
+    }
+
+    private func priorImportRow(_ item: PriorImportedTransactionSummary) -> some View {
+        VStack(alignment: .leading, spacing: YSSpacing.xxs) {
+            Text(priorImportLabel(item))
+                .font(YSTypography.callout)
+                .foregroundStyle(YSColor.Fallback.textPrimary)
+            Text(item.date.formatted(date: .abbreviated, time: .shortened))
+                .font(YSTypography.caption)
+                .foregroundStyle(YSColor.Fallback.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func priorImportLabel(_ item: PriorImportedTransactionSummary) -> String {
+        let merchant = item.merchant?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let merchant, !merchant.isEmpty {
+            return "\(merchant) · ¥\(item.amountText)"
+        }
+        return "¥\(item.amountText)"
     }
 
     private var confirmStep: some View {
@@ -202,6 +288,18 @@ public struct ScreenshotBookkeepingSheet: View {
 
                 if let error = viewModel.formError {
                     Text(error)
+                        .font(YSTypography.caption)
+                        .foregroundStyle(YSColor.Fallback.warning)
+                }
+
+                if let warning = viewModel.linkingWarning {
+                    Text(warning)
+                        .font(YSTypography.caption)
+                        .foregroundStyle(YSColor.Fallback.warning)
+                }
+
+                if let warning = viewModel.provenanceWarning {
+                    Text(warning)
                         .font(YSTypography.caption)
                         .foregroundStyle(YSColor.Fallback.warning)
                 }

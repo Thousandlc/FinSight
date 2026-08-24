@@ -71,6 +71,29 @@ public final class DebtViewModel {
         )
     }
 
+    public func presentScanner() {
+        isPresentingScanner = true
+    }
+
+    public func openDebtDetail(debtId: UUID) async {
+        isPresentingScanner = false
+        if let debt = findDebt(debtId: debtId) {
+            openDetail(debt)
+            await loadDetail(debtId: debtId)
+            return
+        }
+        await load()
+        if let debt = findDebt(debtId: debtId) {
+            openDetail(debt)
+            await loadDetail(debtId: debtId)
+        }
+    }
+
+    private func findDebt(debtId: UUID) -> Debt? {
+        guard case .content(let snapshot) = phase else { return nil }
+        return snapshot.debts.first { $0.id == debtId }
+    }
+
     public func openDetail(_ debt: Debt) {
         selectedDebtId = debt.id
     }

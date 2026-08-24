@@ -2,7 +2,7 @@
 
 > 文档角色：架构 / 产品重大决策记录（ADR Index）  
 > 版本：v1.0  
-> 更新日期：2026-08-21  
+> 更新日期：2026-08-22  
 > 使用方式：以后任何与下列结论冲突的修改，都应先新增 ADR 说明“为什么改变”，而不是静默回退。
 
 ---
@@ -1496,6 +1496,587 @@ Supports / relates to: ADR-015, ADR-016, ADR-021, ADR-030, ADR-033
 Do **not** merge ADR-034 into ADR-033.
 
 Backup/Restore and local wipe are separate lifecycle contracts.
+
+---
+
+## ADR-035 — Production observability uses privacy-safe correlated telemetry and stage-based error taxonomy
+
+**日期：2026-08-22**
+**状态：Accepted / Implemented — VERIFIED 2026-08-22**
+
+### Context
+
+Before this ADR, production observability was incomplete and fragmented:
+
+```text
+error semantics split across iOS and Gateway
+request correlation existed (X-Youshu-Request-Id) but was not a formal observability contract
+token usage existed only partially
+failure stages were not consistently classified
+privacy-safe production logging needed explicit guarantees
+```
+
+The product still needed a canonical taxonomy, correlated request identity, and allowlisted sinks that cannot leak financial payloads or fail AI/business work.
+
+### Decision
+
+#### A. Canonical taxonomy
+
+Production observability uses orthogonal dimensions:
+
+```text
+failureStage
+errorCode
+failureClass
+retryability
+outcome
+```
+
+Outcomes:
+
+```text
+success
+degraded
+failed
+cancelled
+```
+
+Canonical failure stages:
+
+```text
+clientPreflight
+consent
+requestSerialization
+clientTransport
+gatewayAuth
+gatewayRequestValidation
+providerTransport
+providerHTTP
+providerStructuredOutput
+factMaterialization
+gatewayResponseEncoding
+clientResponseDecode
+assistantValidation
+insightPersistence
+unknown
+```
+
+Trust-boundary stages remain distinct:
+
+```text
+providerStructuredOutput
+≠ factMaterialization
+≠ assistantValidation
+```
+
+iOS does **not** invent Gateway-internal stages from public error envelopes. For Gateway envelopes:
+
+```text
+iOS preserves stable errorCode
+iOS does not fabricate Gateway-internal failureStage
+requestId is used for cross-system join
+```
+
+#### B. Cross-platform taxonomy parity
+
+Shared semantic fixture:
+
+```text
+contracts/observability_taxonomy_defaults.json
+```
+
+Swift (`YoushuFoundation`) and Go (`internal/observability`) defaults must stay aligned with this fixture. No code generation is required.
+
+#### C. Request correlation
+
+```text
+one logical iOS AI operation
+→ one opaque requestId
+
+requestId
+→ iOS observability event
+→ X-Youshu-Request-Id
+→ Gateway ai_request event
+```
+
+iOS retry keeps the same logical `requestId`. Gateway emits one `ai_request` terminal event per HTTP attempt.
+
+The header name remains:
+
+```text
+X-Youshu-Request-Id
+```
+
+This is not a branding migration.
+
+Request IDs are opaque UUIDs and are not derived from user or financial IDs.
+
+Verified correlation is local/component integration (iOS client tests + Gateway httptest), not live Swift↔Go production traffic.
+
+#### D. Gateway terminal telemetry
+
+The production Gateway emits one canonical:
+
+```text
+event = ai_request
+```
+
+per AI HTTP request.
+
+Allowlisted metadata includes:
+
+```text
+requestId
+operation
+outcome
+durationMs
+retryCount
+provider / model / status
+failureStage
+errorCode
+failureClass
+retryability
+schemaStage
+token usage when actually returned
+gatewayVersion
+```
+
+Current sinks are **local structured production-safe logs**. ADR-035 does **not** deploy remote log aggregation or a dashboard.
+
+#### E. iOS telemetry
+
+iOS observes:
+
+```text
+consent
+requestSerialization
+clientTransport
+clientResponseDecode
+assistantValidation
+insightPersistence
+```
+
+plus stable Gateway envelope error codes (with `failureStage=unknown` when the envelope does not expose an internal Gateway stage).
+
+iOS must not log:
+
+```text
+question
+FinancialContext
+FactPack
+merchant
+note
+source IDs
+raw response
+Validator associated amount/key values
+Authorization / token
+```
+
+#### F. Privacy contract
+
+Production observability is allowlisted. Forbidden by default:
+
+```text
+raw financial payload
+prompt
+question/body
+merchant
+note
+financial UUID / sourceIds
+raw image
+Provider raw response
+API key
+Authorization / client token
+arbitrary localized error strings
+```
+
+Debug-only raw diagnostics remain explicitly gated and unavailable in production default behavior.
+
+Observability is **not** a new Consent or AI-data transmission channel.
+
+#### G. Retryability semantics
+
+Retryability describes effective operation/path policy, not theoretical recoverability.
+
+```text
+networkUnavailable  → notRetryable
+transportFailure    → notRetryable
+gatewayRateLimited  → notRetryable
+providerRateLimited → notRetryable
+providerTimeout     → retryable
+providerUnavailable → retryable
+internalError       → retryable
+unknown             → notRetryable
+```
+
+Gateway internal retry count and iOS client retry count are **separate scopes**. Do not equate them.
+
+#### H. Token / cost ownership
+
+```text
+Gateway:
+real Bailian token usage recorded when returned
+
+iOS:
+does not duplicate token usage because the public success envelope does not expose it
+
+cost:
+absent
+```
+
+No price table or estimated cost is implemented.
+
+#### I. Home degraded semantics
+
+This clarifies ADR-020 + ADR-032; it does not supersede them.
+
+```text
+Provider failure
+→ deterministic fallback
+→ Home available
+→ degraded
+
+Validator failure
+→ deterministic fallback
+→ Home available
+→ degraded
+
+optional monthly-summary cache persistence failure
+→ validated ephemeral AI summary
+→ Home available
+→ insightPersistence / persistenceFailure / degraded
+
+core repository / deterministic failure
+→ Home failure
+```
+
+Monthly `.summary` remains a current-state AI enrichment cache, not a core financial fact.
+
+A failed cache write:
+
+```text
+does not create fake freshness
+does not mutate stale cache into fresh
+next load follows normal cache-miss behavior
+```
+
+Explicit `FinancialAssistantService` persistence operations may still fail their own operation.
+
+#### J. Sink failure
+
+Observability/logging failure must never fail the AI or business operation.
+
+```text
+iOS ObservabilityLogSink
+→ local structured safe log
+
+Gateway SafeLog
+→ local structured safe log
+```
+
+No third-party vendor or remote aggregation is part of ADR-035.
+
+#### K. Scope / compliance
+
+ADR-035 does **not** mean:
+
+```text
+public Gateway production-ready
+real Bailian production smoke completed
+remote aggregation / dashboard deployed
+iOS public production AI wiring completed
+ICP constraint removed
+```
+
+ICP remains pending. Public Gateway exposure remains prohibited.
+
+### Verification
+
+Verified candidate:
+
+```text
+HEAD 385647b5c1d4959d449d182f66ec3845d7a548b2
+
+Windows:
+Foundation 30 / Domain 399 / Data 102 / AI 79
+Total 610 PASS
+Failed 0
+swift build -c release PASS
+
+Gateway:
+go test ./... PASS
+go build ./... PASS
+
+Apple:
+workflow ios-apple-gate.yml
+run 32555839840
+Xcode 16.4 (16F6)
+YoushuUITests 36 / YoushuDataTests 102 / YoushuDomainTests 399
+Total 537 PASS
+Failed 0
+```
+
+Windows and Apple are **separate platform gates**. Do not add 610 + 537 as unique tests.
+
+### Relationship
+
+Supports / relates to: ADR-009, ADR-012, ADR-013, ADR-015, ADR-020, ADR-025, ADR-026, ADR-029, ADR-031, ADR-032
+
+Does **not** supersede them.
+
+ADR-035 clarifies Home optional-cache durability under ADR-020 / ADR-032. It does not change Validator, Consent, Gateway materialization ownership, ICP restrictions, or “health-ready ≠ production-ready”.
+
+---
+
+## ADR-036 — Confirmed import provenance uses local cryptographic source fingerprints; per-image Provider semantics remain deferred
+
+**日期：2026-08-22**
+**状态：Accepted — NOT YET IMPLEMENTED**
+
+### Context
+
+Recognition Quality & Import Reliability Steps 1–4A closed **same-flow** import reliability (stale recognition, consent races, confirmation idempotency, partial batch semantics). Step 4B audited remaining gaps:
+
+- Transaction cross-session exact-image dedup is only **partially** possible with current persisted fields.
+- Debt cross-session exact-scan provenance is **not safely representable**.
+- `MediaArtifact` / `AIRecognitionRecord` are workflow/audit metadata, **not** durable confirmed-import provenance.
+- Current `sourceImageId` / `MediaLifecyclePolicy.makeImageId` is a **non-cryptographic media lifecycle identifier** and must **not** become authoritative exact-input identity.
+- True per-image Provider outcome semantics cannot be frozen while production still uses `MockAIProvider` (no pixel-reading recognizer).
+- Stale/cancelled recognition may still write durable metadata **before** Application operation-currentness acceptance.
+
+Production image recognition remains `MockAIProvider`. Real recognition accuracy baseline is **NOT ESTABLISHED**.
+
+### Decision
+
+#### A. Separate durable model — `ConfirmedImportProvenance`
+
+Introduce a future **local persisted** concept equivalent to `ConfirmedImportProvenance`:
+
+> Records that one **confirmed import operation** produced one or more **authoritative financial entities** from a specific **exact local input set**.
+
+It is **NOT**:
+
+```text
+recognition output / TransactionDraft / DebtCandidate
+AIRecognitionRecord
+MediaArtifact
+Transaction / Debt (financial facts)
+Provider transport DTO
+production observability payload
+```
+
+Minimum semantic fields (conceptual — exact Swift names not frozen here):
+
+```text
+user scope
+import capability (screenshot transaction / debt scan batch)
+cryptographic source fingerprint(s) — per input document/image
+operation / batch fingerprint — canonical, versioned, order-insensitive, multiplicity-sensitive
+confirmed entity references (typed refs to Transaction / Debt ids)
+confirmedAt
+```
+
+**Cardinality:**
+
+- One confirmed import operation may reference **multiple** confirmed entities (e.g. debt scan batch → Debt A, B, C).
+- Provenance must **not** falsely assert image-level causality (e.g. “image A caused Debt B”) when recognition cannot prove it.
+- Partial batch confirm: initial provenance records **only successfully persisted** entities; later retry may **extend** the same operation’s entity set.
+
+**Creation eligibility:**
+
+```text
+Recognition Result != Confirmed Import
+```
+
+`ConfirmedImportProvenance` is created/updated **only after**:
+
+```text
+user confirmation
++
+authoritative Transaction / Debt persistence success
+```
+
+Not after: Provider success alone, draft display, recognition metadata write, or abandoned review.
+
+#### B. Cryptographic provenance fingerprint (local-only)
+
+Explicitly separate:
+
+```text
+MediaArtifact.id / sourceImageId  →  media lifecycle identifier (NOT authoritative exact-input identity)
+ConfirmedImportProvenance fingerprint  →  full-file SHA-256 of entire input bytes (local-only)
+```
+
+**Transaction:** one screenshot → one full-file SHA-256.
+
+**Debt batch:** each input document/image → full-file SHA-256; plus an **operation/batch fingerprint** that is:
+
+```text
+order-insensitive: [A,B] == [B,A]
+multiplicity-sensitive: [A,A,B] != [A,B]
+versioned / canonical encoding before hash (implementation must not use fragile plain-string concat)
+```
+
+Fingerprint data is **local-only**. It is **NOT** AI payload, Consent expansion, original-image retention, or observability payload.
+
+**No new `AIDataConsent` field** is required.
+
+#### C. Transaction exact re-import product rule
+
+```text
+exact cryptographic input match
++
+existing confirmed Transaction relation
+→ WARN user
+→ allow navigation / view of existing record
+→ explicit user override may continue import
+```
+
+Do **NOT** hard-block. Do **NOT** use merchant/amount/date/category as duplicate identity. This addresses **exact-source accidental duplication only**, not semantic duplicate detection.
+
+#### D. Debt exact re-scan product rule
+
+Debt is a **long-lived** financial object, not a point-in-time ledger event.
+
+```text
+exact batch fingerprint previously confirmed
+→ indicate prior scan
+→ surface related Debt references where available
+→ user may continue
+```
+
+Do **NOT** hard-block. Do **NOT** define “same image = duplicate Debt” as universal rule. Semantic target: **prior scan / reconciliation candidate**, not pure duplicate prevention.
+
+**Deferred:** field-level reconciliation/merge (outstanding vs currentDue overwrite, statement period rules) — separate future **Debt Reconciliation** decision.
+
+#### E. Recognition metadata lifecycle target
+
+Target boundary ( **NOT YET IMPLEMENTED** ):
+
+```text
+Provider returns recognition result
+        ↓
+Application checks operation generation / currentness
+├─ stale / cancelled / obsolete → discard in memory; NO durable recognition metadata
+└─ current → accept into active review lifecycle → THEN eligible for recognition/media metadata persistence
+```
+
+Applies conceptually to **ScreenshotBookkeeping** and **DebtScanner**.
+
+`AIRecognitionRecord` is **not** repurposed as durable confirmed-import provenance. It may remain workflow/audit metadata. Stale Tasks need **not** be written as `.discarded`; default target is **do not persist** recognition metadata before Application acceptance.
+
+#### F. Backup v1 unchanged — ADR-033 not superseded
+
+```text
+BackupPayloadV1 remains unchanged.
+ConfirmedImportProvenance is excluded from Backup v1.
+```
+
+After ADR-033 restore:
+
+```text
+financial facts restored
+AIDataConsent → deniedDefault
+AIRecognitionRecord / MediaArtifact exclusions unchanged
+ConfirmedImportProvenance absent → duplicate / prior-scan memory resets
+```
+
+This is **intentional** for Backup v1, not data corruption. Cross-device provenance requires a future **Backup v2 / separate ADR**.
+
+#### G. Delete / wipe releases provenance
+
+**Transaction deleted:** remove its provenance entity relation; if no remaining confirmed entity refs, remove provenance record → exact image may import again.
+
+**Debt deleted:** remove its provenance entity relation → re-scan/reconciliation may occur again.
+
+**Full local wipe (ADR-034):** provenance removed with user-owned local state → duplicate/prior-scan memory resets. No permanent tombstone solely to block future import.
+
+#### H. Per-image Provider contract — explicitly deferred
+
+```text
+Per-image Provider outcome taxonomy: DEFERRED UNTIL REAL PIXEL-READING PROVIDER
+```
+
+Current implemented contract remains:
+
+```text
+DebtScanning.scanDebts(from: [BillDocument]) → [DebtCandidate]
+```
+
+Do **NOT** mark RQ-06 closed. Do **NOT** freeze enums (unreadable / unsupported / noRelevantDebt / providerFailure) today.
+
+Future real Provider may introduce Provider-specific DTO → normalized Application recognition batch result, then validated document-level outcomes.
+
+**Rejected as default architecture:** one Provider request per Debt document merely to obtain per-image errors (cross-document context, cost, rate limits, multi-page aggregation quality).
+
+#### I. Write ordering / failure semantics (implementation target)
+
+```text
+authoritative financial fact persists successfully
+        → then eligible to record/update ConfirmedImportProvenance
+```
+
+If financial fact persists but provenance write fails:
+
+```text
+financial fact remains authoritative
+provenance failure → degraded dedup / prior-scan memory only
+do NOT roll back financial fact to simulate atomicity
+```
+
+(JSON Store has no multi-entity transaction API today.)
+
+### Alternatives considered
+
+| Alternative | Rejected because |
+|-------------|------------------|
+| Reuse `Transaction.sourceImageId` as dedup key | Non-cryptographic; not on Debt; lifecycle ≠ provenance |
+| Reuse `AIRecognitionRecord` / `MediaArtifact` | Excluded from Backup v1; ephemeral; debt batch links first image only |
+| Hard-block exact re-import | Blocks legitimate correction / reconciliation flows |
+| Per-document Provider calls now | Loses cross-page context; Mock-driven false closure |
+| Include provenance in Backup v1 | Would reopen ADR-033; deferred to Backup v2 decision |
+| Persist provenance on recognition success | Violates Recognition Result ≠ Confirmed Import |
+
+### Consequences
+
+**When implemented:**
+
+- Local exact-source dedup / prior-scan UX becomes reliable within one device/session lifecycle.
+- Restore from Backup v1 intentionally resets provenance memory.
+- Recognition services must split “return unpersisted result” vs “persist metadata after Application acceptance”.
+- New JSON Store collection + repository port required (see Architecture / Data Model target sections).
+
+**Until implemented:**
+
+- Cross-session exact-source protection remains **implementation pending**.
+- Per-image partial recognition (RQ-06) remains **open**.
+- Current production behavior unchanged (`MockAIProvider`, existing batch port, existing metadata write timing).
+
+### Deferred items (explicit — not decided by ADR-036)
+
+```text
+real OCR / Vision / Bailian image-recognition Provider choice
+Gateway image-recognition endpoint
+per-image outcome enum semantics
+Debt field merge / reconciliation policy
+semantic Transaction duplicate detection
+Backup v2 / portable provenance
+Cloud sync
+```
+
+### Relationship
+
+Supports / relates to: ADR-003, ADR-015, ADR-016, ADR-021, ADR-022, ADR-029, ADR-033, ADR-034
+
+**Does NOT supersede ADR-033.** Local durable provenance ≠ Backup-v1 portable state.
+
+ADR-036 does **not** change BackupPayloadV1, local wipe monotonic semantics (ADR-034 extends naturally), Consent fields, or JSON Store schema **until a separate implementation step**.
+
+### Verification
+
+This ADR is **documentation-only**. No production code, tests, or schema migration in Step 4C.
+
+Windows baseline at acceptance time (Recognition & Import Reliability work, pre-implementation): **677 PASS** (Foundation 30 / Domain 436 / Data 102 / AI 109). Apple gate for latest Recognition candidate: **NOT RUN**.
 
 ---
 

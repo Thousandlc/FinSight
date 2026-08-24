@@ -1,0 +1,206 @@
+{
+  "schemaVersion": "RecognitionQualityCorpusV1",
+  "corpusVersion": "1",
+  "dateComparison": {
+    "precision": "day",
+    "timeZone": "UTC"
+  },
+  "fixtures": [
+    {
+      "id": "tx-expense-normal",
+      "capability": "transactionScreenshot",
+      "sourceKind": "synthetic",
+      "containsRealUserData": false,
+      "tags": ["normal-expense", "known-date"],
+      "assets": ["assets/tx-expense-normal.png"],
+      "transaction": {
+        "amount": { "presence": "known", "value": "42.00" },
+        "currencyCode": { "presence": "known", "value": "CNY" },
+        "transactionType": { "presence": "known", "value": "expense" },
+        "date": { "presence": "known", "value": "2020-02-02" },
+        "merchant": { "presence": "known", "value": "SYNTH_COFFEE_NORTH" },
+        "category": { "presence": "known", "value": "餐饮" }
+      }
+    },
+    {
+      "id": "tx-income-normal",
+      "capability": "transactionScreenshot",
+      "sourceKind": "synthetic",
+      "containsRealUserData": false,
+      "tags": ["normal-income"],
+      "assets": ["assets/tx-income-normal.png"],
+      "transaction": {
+        "amount": { "presence": "known", "value": "2500.00" },
+        "currencyCode": { "presence": "known", "value": "CNY" },
+        "transactionType": { "presence": "known", "value": "income" },
+        "date": { "presence": "known", "value": "2020-03-03" },
+        "merchant": { "presence": "known", "value": "SYNTH_PAYROLL_ACME" },
+        "category": { "presence": "known", "value": "工资" }
+      }
+    },
+    {
+      "id": "tx-unknown-merchant",
+      "capability": "transactionScreenshot",
+      "sourceKind": "synthetic",
+      "containsRealUserData": false,
+      "tags": ["unknown-optional-merchant"],
+      "assets": ["assets/tx-unknown-merchant.png"],
+      "transaction": {
+        "amount": { "presence": "known", "value": "18.80" },
+        "currencyCode": { "presence": "known", "value": "CNY" },
+        "transactionType": { "presence": "known", "value": "expense" },
+        "date": { "presence": "known", "value": "2020-04-04" },
+        "merchant": { "presence": "unknown" },
+        "category": { "presence": "known", "value": "交通" }
+      }
+    },
+    {
+      "id": "tx-known-date",
+      "capability": "transactionScreenshot",
+      "sourceKind": "synthetic",
+      "containsRealUserData": false,
+      "tags": ["known-date"],
+      "assets": ["assets/tx-known-date.png"],
+      "transaction": {
+        "amount": { "presence": "known", "value": "9.90" },
+        "currencyCode": { "presence": "known", "value": "CNY" },
+        "transactionType": { "presence": "known", "value": "expense" },
+        "date": { "presence": "known", "value": "2020-05-05" },
+        "merchant": { "presence": "known", "value": "SYNTH_BUS_FARE" },
+        "category": { "presence": "known", "value": "交通" }
+      }
+    },
+    {
+      "id": "debt-known-outstanding-and-current-due",
+      "capability": "debtScreenshot",
+      "sourceKind": "synthetic",
+      "containsRealUserData": false,
+      "tags": ["known-outstanding", "known-current-due"],
+      "assets": ["assets/debt-known-amounts.png"],
+      "debt": {
+        "candidates": [
+          {
+            "localId": "cand-orange-card",
+            "lender": { "presence": "known", "value": "SYNTH_BANK_ORANGE" },
+            "productName": { "presence": "known", "value": "合成信用卡" },
+            "debtType": { "presence": "known", "value": "creditCard" },
+            "outstandingBalance": { "presence": "known", "value": "8800.00" },
+            "currentDue": { "presence": "known", "value": "1200.00" },
+            "minimumDue": { "presence": "known", "value": "200.00" },
+            "installmentAmount": { "presence": "unknown" },
+            "dueDate": { "presence": "known", "value": "2020-06-06" },
+            "interestRate": { "presence": "unknown" }
+          }
+        ]
+      }
+    },
+    {
+      "id": "debt-current-due-only",
+      "capability": "debtScreenshot",
+      "sourceKind": "synthetic",
+      "containsRealUserData": false,
+      "tags": ["outstanding-unknown", "current-due-known"],
+      "assets": ["assets/debt-current-due-only.png"],
+      "debt": {
+        "candidates": [
+          {
+            "localId": "cand-pine-due-only",
+            "lender": { "presence": "known", "value": "SYNTH_LENDER_PINE" },
+            "productName": { "presence": "known", "value": "合成消费贷" },
+            "debtType": { "presence": "known", "value": "consumerLoan" },
+            "outstandingBalance": { "presence": "unknown" },
+            "currentDue": { "presence": "known", "value": "2300.00" },
+            "minimumDue": { "presence": "unknown" },
+            "installmentAmount": { "presence": "unknown" },
+            "dueDate": { "presence": "known", "value": "2020-07-07" },
+            "interestRate": { "presence": "unknown" }
+          }
+        ]
+      }
+    },
+    {
+      "id": "debt-unknown-due-date",
+      "capability": "debtScreenshot",
+      "sourceKind": "synthetic",
+      "containsRealUserData": false,
+      "tags": ["unknown-due-date"],
+      "assets": ["assets/debt-unknown-due-date.png"],
+      "debt": {
+        "candidates": [
+          {
+            "localId": "cand-cedar-no-due",
+            "lender": { "presence": "known", "value": "SYNTH_BANK_CEDAR" },
+            "productName": { "presence": "known", "value": "合成分期" },
+            "debtType": { "presence": "known", "value": "bnpl" },
+            "outstandingBalance": { "presence": "known", "value": "1500.00" },
+            "currentDue": { "presence": "known", "value": "500.00" },
+            "minimumDue": { "presence": "unknown" },
+            "installmentAmount": { "presence": "known", "value": "500.00" },
+            "dueDate": { "presence": "unknown" },
+            "interestRate": { "presence": "unknown" }
+          }
+        ]
+      }
+    },
+    {
+      "id": "debt-multi-document",
+      "capability": "debtScreenshot",
+      "sourceKind": "synthetic",
+      "containsRealUserData": false,
+      "tags": ["multi-document"],
+      "assets": ["assets/debt-multi-doc-a.png", "assets/debt-multi-doc-b.png"],
+      "debt": {
+        "candidates": [
+          {
+            "localId": "cand-maple-merged",
+            "lender": { "presence": "known", "value": "SYNTH_BANK_MAPLE" },
+            "productName": { "presence": "known", "value": "合成信用卡" },
+            "debtType": { "presence": "known", "value": "creditCard" },
+            "outstandingBalance": { "presence": "known", "value": "6400.00" },
+            "currentDue": { "presence": "known", "value": "800.00" },
+            "minimumDue": { "presence": "known", "value": "100.00" },
+            "installmentAmount": { "presence": "unknown" },
+            "dueDate": { "presence": "known", "value": "2020-08-08" },
+            "interestRate": { "presence": "unknown" }
+          }
+        ]
+      }
+    },
+    {
+      "id": "debt-multi-candidate",
+      "capability": "debtScreenshot",
+      "sourceKind": "synthetic",
+      "containsRealUserData": false,
+      "tags": ["multi-candidate"],
+      "assets": ["assets/debt-multi-candidate.png"],
+      "debt": {
+        "candidates": [
+          {
+            "localId": "cand-alpha",
+            "lender": { "presence": "known", "value": "SYNTH_LENDER_ALPHA" },
+            "productName": { "presence": "known", "value": "合成卡A" },
+            "debtType": { "presence": "known", "value": "creditCard" },
+            "outstandingBalance": { "presence": "known", "value": "3000.00" },
+            "currentDue": { "presence": "known", "value": "300.00" },
+            "minimumDue": { "presence": "unknown" },
+            "installmentAmount": { "presence": "unknown" },
+            "dueDate": { "presence": "known", "value": "2020-09-09" },
+            "interestRate": { "presence": "unknown" }
+          },
+          {
+            "localId": "cand-beta",
+            "lender": { "presence": "known", "value": "SYNTH_LENDER_BETA" },
+            "productName": { "presence": "known", "value": "合成贷B" },
+            "debtType": { "presence": "known", "value": "consumerLoan" },
+            "outstandingBalance": { "presence": "known", "value": "7000.00" },
+            "currentDue": { "presence": "known", "value": "700.00" },
+            "minimumDue": { "presence": "unknown" },
+            "installmentAmount": { "presence": "unknown" },
+            "dueDate": { "presence": "known", "value": "2020-09-10" },
+            "interestRate": { "presence": "unknown" }
+          }
+        ]
+      }
+    }
+  ]
+}

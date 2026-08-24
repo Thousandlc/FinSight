@@ -9,7 +9,9 @@ public struct FinancialContext: Equatable, Sendable {
     public var monthlyDebtPayment: Money
     public var estimatedMonthEndBalance: Money
     public var totalDebt: Money
+    public var totalDebtAvailability: FieldAvailability
     public var estimatedMonthlyRepayment: Money
+    public var estimatedMonthlyRepaymentAvailability: FieldAvailability
     public var estimatedDebtFreeDate: Date?
     public var financialHealthScore: Int?
     public var debtPaymentToIncomePercent: Decimal?
@@ -37,7 +39,9 @@ public struct FinancialContext: Equatable, Sendable {
         monthlyDebtPayment: Money = .zeroCNY,
         estimatedMonthEndBalance: Money = .zeroCNY,
         totalDebt: Money = .zeroCNY,
+        totalDebtAvailability: FieldAvailability = .known,
         estimatedMonthlyRepayment: Money = .zeroCNY,
+        estimatedMonthlyRepaymentAvailability: FieldAvailability = .known,
         estimatedDebtFreeDate: Date? = nil,
         financialHealthScore: Int? = nil,
         debtPaymentToIncomePercent: Decimal? = nil,
@@ -60,7 +64,9 @@ public struct FinancialContext: Equatable, Sendable {
         self.monthlyDebtPayment = monthlyDebtPayment
         self.estimatedMonthEndBalance = estimatedMonthEndBalance
         self.totalDebt = totalDebt
+        self.totalDebtAvailability = totalDebtAvailability
         self.estimatedMonthlyRepayment = estimatedMonthlyRepayment
+        self.estimatedMonthlyRepaymentAvailability = estimatedMonthlyRepaymentAvailability
         self.estimatedDebtFreeDate = estimatedDebtFreeDate
         self.financialHealthScore = financialHealthScore
         self.debtPaymentToIncomePercent = debtPaymentToIncomePercent

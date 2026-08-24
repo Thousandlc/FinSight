@@ -25,12 +25,21 @@ public struct DebtService: DebtManaging, DebtDetailProviding {
 
     public func create(_ input: CreateDebtInput, userId: UUID) async throws -> Debt {
         let lender = try requireLender(input.lender)
-        guard input.approximateBalance >= 0 else {
+        if let amount = input.approximateBalance, amount < 0 {
             throw DomainError.validationFailed("欠款金额不能为负")
         }
 
-        let money = Money(amount: input.approximateBalance, currencyCode: input.currencyCode)
+        let debtId = input.idempotencyKey ?? UUID()
+        if let existing = try await debts.fetch(id: debtId) {
+            guard existing.userId == userId else { throw DomainError.userMismatch }
+            if try await hasCreatedEvent(debtId: debtId) {
+                return existing
+            }
+        }
+
+        let money = input.approximateBalance.map { Money(amount: $0, currencyCode: input.currencyCode) }
         var debt = Debt(
+            id: debtId,
             userId: userId,
             lender: lender,
             productName: normalized(input.productName),
@@ -54,14 +63,17 @@ public struct DebtService: DebtManaging, DebtDetailProviding {
         debt.profileCompleteness = DebtProfileCompleteness.score(for: debt)
         try await debts.upsert(debt)
 
-        let created = DebtEvent(
-            debtId: debt.id,
-            userId: userId,
-            type: .created,
-            amount: money,
-            note: "创建债务"
-        )
-        try await events.upsert(created)
+        if try await !hasCreatedEvent(debtId: debt.id) {
+            let created = DebtEvent(
+                id: Self.importCreatedEventId(for: debt.id),
+                debtId: debt.id,
+                userId: userId,
+                type: .created,
+                amount: money,
+                note: "创建债务"
+            )
+            try await events.upsert(created)
+        }
         if let establishment {
             try await establishment.markPartialFromFirstDebt(userId: userId)
         }
@@ -200,6 +212,17 @@ public struct DebtService: DebtManaging, DebtDetailProviding {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
+
+    private func hasCreatedEvent(debtId: UUID) async throws -> Bool {
+        try await events.fetchAll(debtId: debtId).contains { $0.type == .created }
+    }
+
+    /// Stable id for import-local `.created` events keyed by Debt id.
+    static func importCreatedEventId(for debtId: UUID) -> UUID {
+        var bytes = debtId.uuid
+        bytes.15 ^= 0xA5
+        return UUID(uuid: bytes)
+    }
 }
 
 /// 债务中心列表与汇总。
@@ -223,17 +246,23 @@ public struct DebtListService: DebtListProviding, DebtDetailProviding {
         }
 
         let total = DebtCenterCalculator.totalDebt(debts: list)
-        let monthly = DebtCenterCalculator.estimatedMonthlyRepayment(debts: list)
+        let outstanding = DebtMoneyPresentation.knownOutstandingTotal(from: list, computed: total)
+        let monthly = DebtMoneyPresentation.estimatedMonthly(from: list)
         let last = DebtCenterCalculator.lastRepayment(events: allEvents)
         let next = DebtCenterCalculator.nextPayment(debts: list)
-        let pressure = DebtCenterCalculator.debtPressureScore(debts: list, monthlyRepayment: monthly)
+        let pressure = DebtCenterCalculator.debtPressureScore(
+            debts: list,
+            monthlyRepayment: monthly.isComplete ? monthly.knownAmount : nil
+        )
         let highCost = DebtCenterCalculator.highCostDebts(debts: list)
         let freeDate = DebtCenterCalculator.debtFreeEstimate(debts: list)
 
         return DebtListSnapshot(
             debts: list,
-            totalOutstanding: total,
-            estimatedMonthlyRepayment: monthly,
+            totalOutstanding: outstanding.knownAmount ?? .zeroCNY,
+            outstandingAvailability: outstanding.availability,
+            estimatedMonthlyRepayment: monthly.knownAmount ?? .zeroCNY,
+            estimatedMonthlyRepaymentAvailability: monthly.availability,
             lastRepaymentDate: last?.date,
             lastRepaymentAmount: last?.amount,
             nextPaymentDate: next?.date,

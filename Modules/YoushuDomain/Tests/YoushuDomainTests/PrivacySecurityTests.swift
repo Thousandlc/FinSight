@@ -289,14 +289,23 @@ struct AIDataConsentTests {
             recognitionRecords: container.aiRecognitionRecords
         )
         do {
-            _ = try await service.recognize(imageData: Data("x".utf8), userId: userId)
+            _ = try await service.recognize(
+                imageData: Data("x".utf8),
+                userId: userId,
+                importIdentity: TransactionScreenshotImportIdentity.from(imageData: Data("x".utf8))
+            )
             Issue.record("Expected consent required")
         } catch let error as PrivacyError {
             #expect(error == .consentRequired("记账截图"))
         }
 
         _ = try await consentService.acceptScreenshotPrivacy(userId: userId)
-        let result = try await service.recognize(imageData: Data("x".utf8), userId: userId)
+        let pending = try await service.recognize(
+            imageData: Data("x".utf8),
+            userId: userId,
+            importIdentity: TransactionScreenshotImportIdentity.from(imageData: Data("x".utf8))
+        )
+        let result = try await service.acceptRecognition(pending, userId: userId)
         #expect(result.sourceImageId != nil)
     }
 
@@ -562,12 +571,20 @@ struct AIDataConsentTests {
         )
 
         _ = try await consentService.acceptScreenshotPrivacy(userId: userId)
-        _ = try await service.recognize(imageData: Data("x".utf8), userId: userId)
+        _ = try await service.recognize(
+            imageData: Data("x".utf8),
+            userId: userId,
+            importIdentity: TransactionScreenshotImportIdentity.from(imageData: Data("x".utf8))
+        )
         #expect(extractor.callCount == 1)
 
         _ = try await consentService.revokeScreenshotPrivacy(userId: userId)
         do {
-            _ = try await service.recognize(imageData: Data("y".utf8), userId: userId)
+            _ = try await service.recognize(
+                imageData: Data("y".utf8),
+                userId: userId,
+                importIdentity: TransactionScreenshotImportIdentity.from(imageData: Data("y".utf8))
+            )
             Issue.record("Expected consent required after revoke")
         } catch let error as PrivacyError {
             #expect(error == .consentRequired("记账截图"))
@@ -596,7 +613,11 @@ struct AIDataConsentTests {
         let document = BillDocument(kind: .screenshot, data: Data("bill".utf8), fileName: "a.png")
 
         do {
-            _ = try await service.scan(documents: [document], userId: userId)
+            _ = try await service.scan(
+                documents: [document],
+                userId: userId,
+                importIdentity: DebtScanImportIdentity.from(documents: [document])
+            )
             Issue.record("Expected consent required")
         } catch let error as PrivacyError {
             #expect(error == .consentRequired("债务账单图片"))
@@ -604,7 +625,11 @@ struct AIDataConsentTests {
         #expect(scanner.callCount == 0)
 
         _ = try await consentService.acceptDebtScanPrivacy(userId: userId)
-        _ = try await service.scan(documents: [document], userId: userId)
+        _ = try await service.scan(
+            documents: [document],
+            userId: userId,
+            importIdentity: DebtScanImportIdentity.from(documents: [document])
+        )
         #expect(scanner.callCount == 1)
     }
 
@@ -629,12 +654,20 @@ struct AIDataConsentTests {
         let document = BillDocument(kind: .screenshot, data: Data("bill".utf8), fileName: "a.png")
 
         _ = try await consentService.acceptDebtScanPrivacy(userId: userId)
-        _ = try await service.scan(documents: [document], userId: userId)
+        _ = try await service.scan(
+            documents: [document],
+            userId: userId,
+            importIdentity: DebtScanImportIdentity.from(documents: [document])
+        )
         #expect(scanner.callCount == 1)
 
         _ = try await consentService.revokeDebtScanPrivacy(userId: userId)
         do {
-            _ = try await service.scan(documents: [document], userId: userId)
+            _ = try await service.scan(
+                documents: [document],
+                userId: userId,
+                importIdentity: DebtScanImportIdentity.from(documents: [document])
+            )
             Issue.record("Expected consent required after revoke")
         } catch let error as PrivacyError {
             #expect(error == .consentRequired("债务账单图片"))

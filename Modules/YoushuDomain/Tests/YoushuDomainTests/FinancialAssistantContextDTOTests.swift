@@ -82,7 +82,7 @@ struct FinancialAssistantContextDTOTests {
         )
         #expect(dto.balance.availableCash.amount == 1_000)
         #expect(dto.monthly.income.amount == 8_000)
-        #expect(dto.debt.totalOutstanding.amount == 12_000)
+        #expect(dto.debt.totalOutstanding?.amount == 12_000)
         #expect(dto.cashFlow30?.safeBalance.amount == 2_000)
         #expect(dto.goals.count == 1)
         #expect(dto.budgets.count == 1)
