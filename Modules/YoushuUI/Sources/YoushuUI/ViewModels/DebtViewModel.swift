@@ -71,10 +71,6 @@ public final class DebtViewModel {
         )
     }
 
-    public func presentScanner() {
-        isPresentingScanner = true
-    }
-
     public func openDebtDetail(debtId: UUID) async {
         isPresentingScanner = false
         if let debt = findDebt(debtId: debtId) {
