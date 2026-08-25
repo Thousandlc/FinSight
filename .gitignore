@@ -31,5 +31,6 @@ finsight-store.json
 
 .smoke-output/
 .eval-output/
+.recognition-quality-private/
 services/youshu-ai-gateway/dist/
 services/youshu-ai-gateway/bin/
