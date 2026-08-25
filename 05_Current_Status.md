@@ -2,7 +2,7 @@
 
 > 文档角色：项目当前存档点 / 新 Chat 恢复入口  
 > 版本：v1.0
-> **Last Updated：2026-08-24（ADR-037 Step 3 — VERIFIED）**
+> **Last Updated：2026-08-25（ADR-037 Step 4A measurement infrastructure — VERIFIED; real baseline NOT ESTABLISHED）**
 > 本文件应频繁更新；旧状态不应无限累积，重大历史移入 Decision Log。
 
 ---
@@ -95,7 +95,8 @@ Modules/Package.swift
 - 历史 Apple Recognition Quality & Import Reliability / ADR-036 gate：**green**（run **32684027127**, HEAD `153a23d2d7dbfa570c063156932a646340f0f3f0`, Xcode **16.4 (16F6)**, macos-15-arm64 / macOS 15.7.7）— **不是 ADR-037 verification**
 - 历史 ADR-037 Step 1 Apple gate：**VERIFIED**（run **32707622669**, verified candidate `bf75520bf7f71affcd73a04add48523a849510bf`, Xcode **16.4 (16F6)**）
 - 历史 ADR-037 Step 2 Apple gate：**VERIFIED**（run **32710172471**, verified candidate `9fc6bfad6e84c137638b5a458889489ea4851c8b`, Xcode **16.4 (16F6)**）
-- 当前 ADR-037 Step 3 Apple gate：**VERIFIED**（run **32716260090**, verified candidate `67de996dc817ba9114479f613f0c83292f1e8240`, Xcode **16.4 (16F6)**）
+- 历史 ADR-037 Step 3 Apple gate：**VERIFIED**（run **32716260090**, verified candidate `67de996dc817ba9114479f613f0c83292f1e8240`, Xcode **16.4 (16F6)**）
+- 当前 ADR-037 Step 4A measurement-infrastructure Apple gate：**VERIFIED**（run **32799176406**, candidate `0a039e98efff5562e9bbd518ae2e1ee0cd35ad9d`, Xcode **16.4 (16F6)**；real corpus unavailable）
 - 历史 Apple Production Observability gate：green（run **32555839840**, HEAD `385647b5c1d4959d449d182f66ec3845d7a548b2`, Xcode **16.4 (16F6)**）— **不再是当前基线**
 - 历史 Apple Privacy & AI Settings Closure gate：green（run **32470000762**, HEAD `b5a199cf87e12b3ebfcf1a2de2bf94e8f2329702`, Xcode **16.4**）— **不再是当前基线**
 - 历史 Apple Backup/Restore gate：green（run **32443787799**, HEAD `967c0c5`, Xcode **16.4**）— **不再是当前基线**
@@ -644,7 +645,52 @@ RemoteFinancialAIProvider
 
 ## 16. 测试状态
 
-### 2026-08-24 ADR-037 Step 3 — 当前候选基线
+### 2026-08-25 ADR-037 Step 4A — 当前候选基线
+
+Step 4A 在现有 Recognition Quality harness 内增加 privacy-safe private corpus runner、确定性 corpus digest、
+覆盖/结果/字段级双分母指标、frozen v1 accuracy gate、延迟与 aggregate-only report。未修改 OCR / parser。
+
+```text
+Private-corpus infrastructure: 16 PASS (3 suites)
+Existing Recognition regression: 51 PASS (6 suites)
+ADR-036 / screenshot lifecycle regression: 71 PASS (10 suites)
+
+Foundation:  30 PASS
+Domain:     493 PASS
+Data:       114 PASS
+AI:         150 PASS
+Total:      787 PASS (111 suites)
+Failed:       0
+
+swift build -c release:
+PASS
+```
+
+Code candidate：`0a039e98efff5562e9bbd518ae2e1ee0cd35ad9d`
+
+Apple gate：GitHub Actions run **32799176406**；Xcode **16.4 (16F6)**；macos-15-arm64 / macOS 15.7.7。
+
+```text
+Real-corpus infrastructure: 16 PASS
+REAL BASELINE CORPUS NOT AVAILABLE
+
+YoushuUITests:       70 PASS
+YoushuDataTests:    114 PASS
+YoushuDomainTests:  493 PASS
+iOS total:          677 PASS
+Failed:               0
+```
+
+private-corpus package tests、shared full gate、iOS integration gate 是不同命令，**不得相加为 unique tests**。
+当前没有可用私有真实语料，未运行真实 Vision corpus measurement，故：
+
+```text
+Real Recognition Accuracy Baseline: NOT ESTABLISHED
+Accuracy Gate:                       NOT EVALUATED / NOT EVALUABLE
+Release Accuracy Eligibility:        NOT ACHIEVED
+```
+
+### 2026-08-24 ADR-037 Step 3 — 历史 production-composition 候选基线
 
 ADR-037 Step 3 shared 与 Apple gate 均已在对应精确候选上验证。
 
@@ -718,7 +764,7 @@ Transaction single-image recognition outcomes:
 DEFINED (recognized / unsupported / unreadable / failure)
 
 Real Recognition Accuracy Baseline:
-NOT ESTABLISHED
+NOT ESTABLISHED (Step 4A runner ready; private corpus unavailable)
 
 Real Pixel-reading Recognizer:
 IMPLEMENTED (production-composed Apple Vision Transaction recognizer)
@@ -745,7 +791,7 @@ ACCEPTED / IMPLEMENTED — VERIFIED 2026-08-24
 | Milestone | Status |
 |-----------|--------|
 | Recognition Evaluation Infrastructure | **ESTABLISHED** |
-| Real recognition accuracy baseline | **NOT ESTABLISHED** (real corpus run and threshold decision remain open) |
+| Real recognition accuracy baseline | **NOT ESTABLISHED** (Step 4A runner verified; real corpus run remains open) |
 | Transaction pixel-reading recognizer | **IMPLEMENTED / PRODUCTION COMPOSITION WIRED / APPLE VERIFIED** (`AppleVisionTransactionRecognizer`) |
 | Production Debt recognizer | **UNCHANGED** (`MockAIProvider`) |
 | Transaction same-flow import reliability | **CLOSED** |
@@ -757,9 +803,9 @@ ACCEPTED / IMPLEMENTED — VERIFIED 2026-08-24
 | Schema v5 `ConfirmedImportProvenance` | **CLOSED** |
 | Transaction single-image outcomes | **DEFINED** (ADR-037) |
 | Debt per-image Provider partial outcomes | **INTENTIONALLY DEFERRED** |
-| ADR-037 Step 3 candidate Apple gate | **VERIFIED** (run 32716260090; candidate `67de996…`) |
+| ADR-037 Step 4A measurement infrastructure | **VERIFIED** (run 32799176406; candidate `0a039e9…`; corpus unavailable) |
 
-Do not add Windows 771 and Apple 677 as unique tests.
+Do not add shared 787, Apple package-infrastructure 16, and iOS integration 677 as unique tests.
 
 ### 2026-08-22 Recognition Quality & Import Reliability — 历史中间基线
 
@@ -1254,4 +1300,4 @@ domain / DNS
 
 ## 22. 当前一句话存档
 
-**截至 2026-08-24，FinSight ADR-037 Step 3 已完成：production `TransactionExtracting` 已仅切换为本地 `AppleVisionTransactionRecognizer`，真实 Apple Vision 合成图片像素 OCR 经 production composition 输出可审核 `TransactionDraft`；Windows/shared **771 PASS**（Foundation 30 / Domain 493 / Data 114 / AI 134，Failed 0）且 release build PASS；Apple **677 PASS**（UI 70 / Data 114 / Domain 493，Failed 0；run 32716260090；verified candidate `67de996dc817ba9114479f613f0c83292f1e8240`；Xcode 16.4 / 16F6）。两个 platform gates 不相加。DebtScanning 与 FinancialAssisting 未切换，真实 accuracy baseline 仍 **NOT ESTABLISHED**，Debt per-image Provider outcomes 仍 **DEFERRED**。ADR-036 provenance/currentness、schema v5、Backup v1、Consent 与 remote-image boundary 均未改变。**
+**截至 2026-08-25，FinSight ADR-037 Step 4A measurement infrastructure 已在既有 Recognition Quality harness 内完成并验证：private-corpus runner、deterministic digest、字段级双分母指标、unsupported false-positive、aggregate-only privacy report 与 frozen v1 gate 均已就绪；Windows/shared **787 PASS**（Foundation 30 / Domain 493 / Data 114 / AI 150，Failed 0）且 release build PASS；Apple package infrastructure **16 PASS**，iOS integration **677 PASS**（UI 70 / Data 114 / Domain 493，Failed 0；run 32799176406；candidate `0a039e98efff5562e9bbd518ae2e1ee0cd35ad9d`；Xcode 16.4 / 16F6），不同命令不相加。由于 `REAL BASELINE CORPUS NOT AVAILABLE`，真实 accuracy baseline 仍 **NOT ESTABLISHED**、accuracy gate **NOT EVALUATED / NOT EVALUABLE**、release accuracy eligibility **NOT ACHIEVED**。Production Transaction 仍为本地 `AppleVisionTransactionRecognizer`；DebtScanning/FinancialAssisting、ADR-036 lifecycle、schema v5、Backup v1、Consent 与 remote-image boundary 均未改变。**

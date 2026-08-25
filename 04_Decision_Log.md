@@ -2189,6 +2189,23 @@ a real accuracy baseline.
   without auto-confirming a Transaction. No screenshot or OCR text is sent remotely or persisted as metadata.
 - This production switch does not establish an accuracy baseline or pass an accuracy/release gate.
 
+### Step 4A measurement infrastructure
+
+- Reused the existing Recognition Quality contract, comparisons, adapters, and report conventions; no second
+  benchmark framework was introduced.
+- Added an opt-in private local Transaction corpus manifest with opaque IDs, explicit outcome/coverage labels,
+  deterministic canonical-manifest plus ordered-image SHA-256 digest, production recognizer execution, latency,
+  outcome distribution, field-level end-to-end and recognized-only denominators, readable-negative false-positive
+  rate, aggregate diagnostic categories, and the frozen v1 threshold gate.
+- Amount comparison remains exact `Decimal` equality. Date labels explicitly select day or minute precision in the
+  corpus timezone. Merchant normalization is limited to whitespace, Unicode width, and Latin case normalization.
+- The aggregate report schema contains no per-sample collection, sample ID, asset path, OCR text, image bytes,
+  ground-truth values, recognized amount, or merchant value. Private input and optional report output remain local.
+- Missing `REAL_RECOGNITION_CORPUS` prints `REAL BASELINE CORPUS NOT AVAILABLE`; normal CI does not substitute Mock or
+  synthetic fixtures. No private corpus was available for this verification, so no real metrics or gate result exist.
+- No Vision configuration, parser rule, confidence threshold, production outcome, persistence, Backup, Consent,
+  production Provider composition, or remote-image boundary changed. Parser/OCR tuning remains Step 4B-only.
+
 ### Deferred
 
 - additional unsupported WeChat / Alipay historical layouts beyond conservative v1 rules
@@ -2247,6 +2264,20 @@ Step 3 Apple: ios-apple-gate.yml run 32716260090
        YoushuUITests 70 PASS / YoushuDataTests 114 PASS / YoushuDomainTests 493 PASS
        Total 677 PASS; Failed 0
        Production composition 3 PASS, including production-composed synthetic pixel OCR to editable review
+
+Step 4A private-corpus infrastructure: 16 PASS (3 suites); Failed 0
+Step 4A existing Recognition regression: 51 PASS (6 suites); Failed 0
+Step 4A ADR-036 / screenshot lifecycle regression: 71 PASS (10 suites); Failed 0
+Step 4A Windows/shared full gate: 787 PASS (111 suites); Failed 0
+Step 4A swift build -c release: PASS
+Step 4A real-corpus run: NOT RUN — REAL BASELINE CORPUS NOT AVAILABLE
+Step 4A Apple: ios-apple-gate.yml run 32799176406
+       verified candidate 0a039e98efff5562e9bbd518ae2e1ee0cd35ad9d
+       Xcode 16.4 (16F6), macos-15-arm64 / macOS 15.7.7
+       private-corpus infrastructure 16 PASS; corpus unavailable (no fallback)
+       YoushuUITests 70 PASS / YoushuDataTests 114 PASS / YoushuDomainTests 493 PASS
+       iOS integration total 677 PASS; Failed 0
+       Do not add shared, package-infrastructure, and iOS totals as unique tests.
 ```
 
 ---

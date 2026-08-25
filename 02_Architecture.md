@@ -693,7 +693,7 @@ Provider
 
 ### Import Provenance Architecture（ADR-036 — ACCEPTED / IMPLEMENTED — VERIFIED 2026-08-24）
 
-> **Status:** ADR-036 remains implemented. ADR-037 Step 3 production Transaction recognition is Apple-verified on candidate `67de996dc817ba9114479f613f0c83292f1e8240`; real accuracy remains **NOT ESTABLISHED**. Recognition Quality harness ≠ OCR quality.
+> **Status:** ADR-036 remains implemented. ADR-037 Step 4A measurement infrastructure is Apple-verified on candidate `0a039e98efff5562e9bbd518ae2e1ee0cd35ad9d`; private real corpus was unavailable, so real accuracy remains **NOT ESTABLISHED**. Recognition Quality harness readiness ≠ measured OCR quality.
 
 **Implemented flow:**
 
@@ -816,6 +816,25 @@ Recognition Result != Transaction
 Apple Vision implementation 与真实 pixel-reading Transaction recognizer 已接入 production `TransactionExtracting`；
 `DebtScanning` 与 `FinancialAssisting` 未切换。真实 accuracy baseline 尚未建立。ADR-036 exact-source provenance、
 currentness 与写入顺序不变；识别仍在本机完成且不远程传输图片。
+
+**Step 4A measurement infrastructure（VERIFIED 2026-08-25）：**
+
+现有 Recognition Quality harness 已原位扩展私有真实 Transaction 语料路径；没有建立第二套 benchmark。
+
+```text
+REAL_RECOGNITION_CORPUS=<private local directory>
+  → private manifest + opaque sample ids + local image bytes
+  → deterministic canonical manifest / ordered image SHA-256 corpus digest
+  → production AppleVisionTransactionRecognizer
+  → field-level aggregate metrics + frozen v1 threshold evaluation
+  → privacy-safe aggregate report
+```
+
+aggregate report 只包含 corpus/provider/candidate identity、覆盖/结果/错误计数、字段分子分母、门禁结果、
+延迟和通用环境说明；不包含 sample ids、asset paths、原始 OCR、截图字节或逐样本金额/merchant。
+缺少显式私有语料时 runner 输出 `REAL BASELINE CORPUS NOT AVAILABLE`，不会回退 Mock/合成 fixture 并冒充真实基线。
+Step 4A 没有修改 Vision/OCR 配置或 deterministic parser。当前环境无私有真实语料，因此 real baseline 仍为
+**NOT ESTABLISHED**，accuracy gate 为 **NOT EVALUATED / NOT EVALUABLE**。
 
 **Current batch abstraction (unchanged):**
 
