@@ -78,6 +78,9 @@ jobs:
             -scheme Youshu \
             -resolvePackageDependencies
 
+      - name: Verify real Recognition Quality baseline infrastructure
+        run: swift test --filter RealTransactionRecognition
+
       - name: Run iOS integration gate
         run: bash ./scripts/test-ios.sh
 
